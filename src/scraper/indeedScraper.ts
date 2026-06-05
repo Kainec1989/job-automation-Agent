@@ -1,7 +1,8 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { getContextOptions, scrapeSearchUrl, sleep } from './browser.js';
+import { getContextOptions, scrapePaginatedSearch, sleep } from './browser.js';
+import { buildIndeedPageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
@@ -76,7 +77,18 @@ async function scrapeAllIndeedSearches(browser: Browser): Promise<ScrapedVacancy
     }
 
     try {
-      const vacancies = await scrapeSearchUrl(browser, searchUrls[i], scrapeIndeedPage, contextOptions);
+      const vacancies = await scrapePaginatedSearch(
+        browser,
+        searchUrls[i],
+        scrapeIndeedPage,
+        {
+          maxPages: env.scrapeMaxPages,
+          buildPageUrl: buildIndeedPageUrl,
+          contextOptions,
+          sourceLabel: 'Indeed',
+          pageDelayMs: env.scrapePageDelayMs,
+        },
+      );
       mergeVacancies(merged, vacancies);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

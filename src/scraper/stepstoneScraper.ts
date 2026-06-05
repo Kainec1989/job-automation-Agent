@@ -1,7 +1,8 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { scrapeSearchUrl, sleep } from './browser.js';
+import { scrapePaginatedSearch, sleep } from './browser.js';
+import { buildStepstonePageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
@@ -85,7 +86,17 @@ async function scrapeAllStepstoneSearches(browser: Browser): Promise<ScrapedVaca
     }
 
     try {
-      const vacancies = await scrapeSearchUrl(browser, searchUrls[i], scrapeStepstonePage);
+      const vacancies = await scrapePaginatedSearch(
+        browser,
+        searchUrls[i],
+        scrapeStepstonePage,
+        {
+          maxPages: env.scrapeMaxPages,
+          buildPageUrl: buildStepstonePageUrl,
+          sourceLabel: 'Stepstone',
+          pageDelayMs: env.scrapePageDelayMs,
+        },
+      );
       mergeVacancies(merged, vacancies);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

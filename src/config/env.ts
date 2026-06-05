@@ -98,6 +98,8 @@ const browserHeadless = optionalEnv('BROWSER_HEADLESS', 'true') !== 'false';
 const fetchFullDescription = optionalEnv('FETCH_FULL_DESCRIPTION', 'true') !== 'false';
 const descriptionFetchDelayMs = Number(optionalEnv('DESCRIPTION_FETCH_DELAY_MS', '3000'));
 const extractEmail = optionalEnv('EXTRACT_EMAIL', 'true') !== 'false';
+const scrapeMaxPages = Number(optionalEnv('SCRAPE_MAX_PAGES', '3'));
+const scrapePageDelayMs = Number(optionalEnv('SCRAPE_PAGE_DELAY_MS', '5000'));
 export const env = {
   databasePath: resolve(optionalEnv('DATABASE_PATH', './data/vacancies.db')),
 
@@ -115,6 +117,8 @@ export const env = {
   fetchFullDescription,
   descriptionFetchDelayMs,
   extractEmail,
+  scrapeMaxPages,
+  scrapePageDelayMs,
   enabledScrapers: parseScraperList(optionalEnv('SCRAPERS', 'stepstone,linkedin')),
 
   indeedSearchUrls: [

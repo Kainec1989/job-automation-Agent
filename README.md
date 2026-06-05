@@ -91,6 +91,8 @@ See [`.env.example`](.env.example). Important variables:
 - `SEARCH_LOCATION` / `SEARCH_RADIUS_KM` — default: Leipzig, 150 km
 - `FETCH_FULL_DESCRIPTION` — load full job text before classification
 - `EXTRACT_EMAIL` — parse HR emails from job pages into DB (default: on)
+- `SCRAPE_MAX_PAGES` — pages per search URL (default: 3)
+- `SCRAPE_PAGE_DELAY_MS` — delay between pages (default: 5000)
 - `CHROME_PATH` — e.g. `/usr/bin/google-chrome`
 - `DCI_CERTIFICATE_PATH` — optional 3rd PDF attachment
 

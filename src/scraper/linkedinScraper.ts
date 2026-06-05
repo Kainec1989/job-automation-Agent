@@ -1,7 +1,8 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { scrapeSearchUrl, sleep, getContextOptions } from './browser.js';
+import { scrapePaginatedSearch, sleep, getContextOptions } from './browser.js';
+import { buildLinkedInPageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
@@ -125,11 +126,17 @@ async function scrapeAllLinkedInSearches(browser: Browser): Promise<ScrapedVacan
     }
 
     try {
-      const vacancies = await scrapeSearchUrl(
+      const vacancies = await scrapePaginatedSearch(
         browser,
         searchUrls[i],
         scrapeLinkedInPage,
-        contextOptions,
+        {
+          maxPages: env.scrapeMaxPages,
+          buildPageUrl: buildLinkedInPageUrl,
+          contextOptions,
+          sourceLabel: 'LinkedIn',
+          pageDelayMs: env.scrapePageDelayMs,
+        },
       );
       mergeVacancies(merged, vacancies);
     } catch (error) {

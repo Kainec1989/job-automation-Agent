@@ -73,6 +73,7 @@ async function main(): Promise<void> {
       `Full description fetch: ${env.fetchFullDescription ? `on (${env.descriptionFetchDelayMs / 1000}s between jobs)` : 'off'}`,
     );
     console.log(`Email extraction: ${env.extractEmail ? 'on' : 'off'}`);
+    console.log(`Pagination: ${env.scrapeMaxPages} page(s), ${env.scrapePageDelayMs / 1000}s between pages`);
     console.log(`Browser headless: ${env.browserHeadless}`);
 
     printScraperAuthWarnings();

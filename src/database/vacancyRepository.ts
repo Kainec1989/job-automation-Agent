@@ -146,6 +146,38 @@ export class VacancyRepository {
       throw new Error(`Vacancy not found: id=${id}`);
     }
   }
+
+  updateType(id: number, type: VacancyType): void {
+    const db = getDatabase();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET type = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `)
+      .run(type, id);
+
+    if (result.changes === 0) {
+      throw new Error(`Vacancy not found: id=${id}`);
+    }
+  }
+
+  markArchived(id: number): void {
+    const db = getDatabase();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET status = 'archived', updated_at = datetime('now')
+        WHERE id = ?
+      `)
+      .run(id);
+
+    if (result.changes === 0) {
+      throw new Error(`Vacancy not found: id=${id}`);
+    }
+  }
 }
 
 export class DuplicateVacancyError extends Error {

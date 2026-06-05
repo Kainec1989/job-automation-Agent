@@ -120,8 +120,14 @@ const TITLE_BLACKLIST_REGEXES = [
   /\bc#\b/i,
   /\b\.net\b/i,
   /\bphp\b/i,
-  /\bc\+\+\b/i,
+  /\bc\+\+/i,
   /\bangular\b/i,
+  // Чужие домены / роли
+  /\bembedded\b/i,
+  /\bfirmware\b/i,
+  /\bgame designer\b/i,
+  /\betl\b/i,
+  /\bbusiness analyst\b/i,
 ] as const;
 
 const EXPERIENCE_BLACKLIST_REGEXES = [
@@ -234,10 +240,11 @@ function findExperienceBlacklistMatch(title: string, combinedText: string): stri
   return findRegexMatch(combinedText, EXPERIENCE_BLACKLIST_REGEXES);
 }
 
-function isPraktikumTitle(title: string, combinedText: string): boolean {
+/** Praktikum/intern — только по заголовку; слово в описании (z. B. CHECK24) не меняет тип */
+function isPraktikumTitle(title: string): boolean {
   return (
-    /\bpraktikum\b/i.test(combinedText) ||
-    /\bpraktikant/i.test(combinedText) ||
+    /\bpraktikum\b/i.test(title) ||
+    /\bpraktikant/i.test(title) ||
     /\bintern\b/i.test(title)
   );
 }
@@ -320,7 +327,7 @@ export function classifyVacancy(title: string, description?: string | null): Cla
     };
   }
 
-  if (isPraktikumTitle(cleanTitle, combinedText)) {
+  if (isPraktikumTitle(cleanTitle)) {
     if (!hasItSignalInTitle(cleanTitle)) {
       return {
         type: 'praktikum',

@@ -6,7 +6,7 @@
 * **Geburtsdatum:** 05.07.1989 in Kharkiv
 * **Adresse:** Str. des 18. Oktober 20, 04103 Leipzig
 * **Telefon:** +49 151 21389202
-* **E-Mail:** kainec.it@gmail.com
+* **E-Mail:** plugin.vg.co@gmail.com
 * **GitHub:** [github.com/Kainec1989](https://github.com/Kainec1989)
 * **Verfügbarkeit:** ab sofort
 

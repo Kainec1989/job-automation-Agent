@@ -43,6 +43,7 @@ npm run dispatch      # send applications (vacancies need email in DB)
 | Command | Description |
 |---------|-------------|
 | `npm run scrape` | Run all enabled scrapers, classify, save to DB |
+| `npm run db:reclassify` | Re-run classifier on `status=new` vacancies; archive misfits |
 | `npm run dispatch` | Send applications to vacancies with `status=new` and email |
 | `npm run sheets:sync` | Push DB contents to Google Sheets |
 | `npm run lebenslauf:pdf` | Generate `assets/Lebenslauf.pdf` from `Lebenslauf.md` |

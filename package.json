@@ -9,6 +9,7 @@
     "send:test": "tsx src/sender/emailService.ts",
     "dispatch": "tsx src/dispatcher/runDailyApplicationPipeline.ts",
     "db:init": "tsx src/database/init.ts",
+    "db:reclassify": "tsx src/tools/reclassifyVacancies.ts",
     "sheets:sync": "tsx src/sheets/syncDatabaseToSheets.ts",
     "lebenslauf:pdf": "tsx src/tools/generateLebenslaufPdf.ts",
     "auth:indeed": "tsx src/scraper/saveBrowserAuth.ts indeed",

@@ -3,11 +3,8 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import type { Attachment } from 'nodemailer/lib/mailer/index.js';
 import { env, getSmtpConfig } from '../config/env.js';
 import type { Vacancy, VacancyType } from '../database/types.js';
-import {
-  buildApplicationAttachments,
-  hasDciCertificate,
-} from './applicationAttachments.js';
-import { buildAnschreiben, selectTemplateType } from './anschreibenTemplates.js';
+import { buildApplicationAttachments } from './applicationAttachments.js';
+import { buildAnschreiben, buildEmailBody, selectTemplateType } from './anschreibenTemplates.js';
 import { createAnschreibenPdf } from './createAnschreibenPdf.js';
 
 export interface EmailAttachment {
@@ -103,22 +100,10 @@ export class EmailService {
     return buildAnschreiben({ ...vacancy, type: templateType });
   }
 
-  buildShortEmailBody(vacancy: Pick<Vacancy, 'title' | 'type'>): string {
-    const documents = hasDciCertificate()
-      ? 'Anschreiben, Lebenslauf und mein DCI-Abschlusszertifikat (Fullstack Web Developer)'
-      : 'Anschreiben und Lebenslauf';
-
-    const intro =
-      vacancy.type === 'praktikum'
-        ? `anbei erhalten Sie meine Bewerbungsunterlagen (${documents}) für den Praktikumsplatz als ${vacancy.title}.`
-        : `anbei erhalten Sie meine Bewerbungsunterlagen (${documents}) für die Position als ${vacancy.title}.`;
-
-    return `Sehr geehrte Damen und Herren,
-
-${intro}
-
-Mit freundlichen Grüßen
-${env.applicantName}`;
+  buildShortEmailBody(
+    vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+  ): string {
+    return buildEmailBody(vacancy);
   }
 
   async sendApplicationEmail(
@@ -155,10 +140,10 @@ ${env.applicantName}`;
 
     const testVacancy = {
       title: 'Junior Software Engineer — TypeScript & React (m/w/d)',
-      company: 'Beispiel GmbH',
+      company: 'Codewerk GmbH',
       type: 'junior' as VacancyType,
       description:
-        'Wir suchen einen Junior Developer mit Node.js, TypeScript, React, Docker und Erfahrung in Testautomatisierung mit Playwright.',
+        'Wir suchen einen Junior Developer mit Node.js, TypeScript, React, Python, LLM und Testautomatisierung mit Playwright.',
     };
 
     const { subject, text: anschreibenText } = this.buildApplicationEmail(testVacancy);

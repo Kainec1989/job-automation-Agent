@@ -179,6 +179,65 @@ function renderTemplate(ctx: TemplateContext): AnschreibenContent {
   };
 }
 
+function shortenBulletForEmail(bullet: string): string {
+  const [head] = bullet.split(' — ');
+  return head ?? bullet;
+}
+
+function getEmailAttachmentList(): string {
+  if (env.dciCertificatePath) {
+    return 'Anschreiben (PDF), Lebenslauf und DCI-Abschlusszertifikat (Fullstack Web Developer)';
+  }
+
+  return 'Anschreiben (PDF) und Lebenslauf';
+}
+
+function buildEmailHook(ctx: TemplateContext): string {
+  if (ctx.type === 'praktikum') {
+    return `die ausgeschriebene Position „${ctx.title}" bei ${ctx.company} entspricht genau dem, was ich suche: praktische Erfahrung in der Softwareentwicklung nach meiner DCI-Weiterbildung (Mai 2025).`;
+  }
+
+  return `die Position „${ctx.title}" bei ${ctx.company} passt zu meinem Profil als Fullstack Web Developer. Ich bringe Node.js/TypeScript-Erfahrung aus Projekten und der DCI-Weiterbildung (Mai 2025) mit.`;
+}
+
+/** Kurzer E-Mail-Text im Posteingang — Anschreiben im PDF-Anhang bleibt ausführlicher */
+export function buildEmailBody(
+  vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+): string {
+  const templateType = selectTemplateType(vacancy.type);
+  const ctx: TemplateContext = {
+    title: vacancy.title,
+    company: vacancy.company,
+    description: vacancy.description ?? null,
+    applicantName: env.applicantName,
+    type: templateType,
+  };
+
+  const skillLines = pickSkillBullets(ctx.title, ctx.description, 3)
+    .map((bullet) => `• ${shortenBulletForEmail(bullet)}`)
+    .join('\n');
+
+  const paragraphs = [
+    'Sehr geehrte Damen und Herren,',
+    '',
+    buildEmailHook(ctx),
+    '',
+    'Besonders relevant für Ihre Anforderungen:',
+    skillLines,
+    '',
+    'Ich arbeite mit modernen AI-assisted Workflows (Cursor IDE), um effizient und qualitätsbewusst zu entwickeln.',
+    '',
+    `Im Anhang: ${getEmailAttachmentList()}. Ein ausführliches Anschreiben finden Sie in der PDF-Datei.`,
+    '',
+    'Ich bin ab sofort verfügbar und freue mich auf Ihre Rückmeldung oder ein persönliches Gespräch.',
+    '',
+    'Mit freundlichen Grüßen',
+    ctx.applicantName,
+  ];
+
+  return paragraphs.join('\n');
+}
+
 export function buildAnschreiben(
   vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
 ): AnschreibenContent {

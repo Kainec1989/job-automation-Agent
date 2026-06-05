@@ -10,7 +10,7 @@ Node.js/TypeScript pipeline for automated job search and applications on the Ger
 - **Full job descriptions** — fetches detail pages, not only listing snippets
 - **IT classifier** — filters by tech stack, seniority, and non-IT roles
 - **SQLite storage** — deduplicated vacancies with status tracking
-- **Google Sheets sync** — optional export for manual review
+- **Google Sheets sync** — export to Sheets, import HR emails back to DB
 - **Email dispatch** — tailored German cover letter (PDF), CV, DCI certificate
 - **Stats** — rejection reasons per scrape run
 
@@ -33,9 +33,11 @@ cp .env.example .env
 
 npm run db:init
 npm run scrape
-npm run sheets:sync   # optional
-npm run send:test     # test SMTP + PDF attachments
-npm run dispatch      # send applications (vacancies need email in DB)
+npm run sheets:sync      # export DB → Google Sheets
+# Fill "Email (HR)" column in the sheet, then:
+npm run sheets:import    # import emails (and status) → DB
+npm run send:test        # test SMTP + PDF attachments
+npm run dispatch         # send applications (status=new + email in DB)
 ```
 
 ## Main Scripts
@@ -46,6 +48,7 @@ npm run dispatch      # send applications (vacancies need email in DB)
 | `npm run db:reclassify` | Re-run classifier on `status=new` vacancies; archive misfits |
 | `npm run dispatch` | Send applications to vacancies with `status=new` and email |
 | `npm run sheets:sync` | Push DB contents to Google Sheets |
+| `npm run sheets:import` | Pull emails and status from Google Sheets into DB |
 | `npm run lebenslauf:pdf` | Generate `assets/Lebenslauf.pdf` from `Lebenslauf.md` |
 | `npm run auth:indeed` | Save browser session for Indeed (anti-bot) |
 | `npm run auth:linkedin` | Save LinkedIn login session |

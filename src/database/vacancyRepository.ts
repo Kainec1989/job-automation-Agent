@@ -106,6 +106,15 @@ export class VacancyRepository {
     return row ? mapRow(row) : null;
   }
 
+  findById(id: number): Vacancy | null {
+    const db = getDatabase();
+    const row = db
+      .prepare('SELECT * FROM vacancies WHERE id = ?')
+      .get(id) as VacancyRow | undefined;
+
+    return row ? mapRow(row) : null;
+  }
+
   findAll(): Vacancy[] {
     const db = getDatabase();
     const rows = db
@@ -164,15 +173,35 @@ export class VacancyRepository {
   }
 
   markArchived(id: number): void {
+    this.updateStatus(id, 'archived');
+  }
+
+  updateEmail(id: number, email: string): void {
     const db = getDatabase();
 
     const result = db
       .prepare(`
         UPDATE vacancies
-        SET status = 'archived', updated_at = datetime('now')
+        SET email = ?, updated_at = datetime('now')
         WHERE id = ?
       `)
-      .run(id);
+      .run(email, id);
+
+    if (result.changes === 0) {
+      throw new Error(`Vacancy not found: id=${id}`);
+    }
+  }
+
+  updateStatus(id: number, status: VacancyStatus): void {
+    const db = getDatabase();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET status = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `)
+      .run(status, id);
 
     if (result.changes === 0) {
       throw new Error(`Vacancy not found: id=${id}`);

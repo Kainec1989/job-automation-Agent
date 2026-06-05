@@ -1,20 +1,10 @@
-import type { sheets_v4 } from 'googleapis';
 import { closeDatabase } from '../database/db.js';
 import { VacancyRepository } from '../database/vacancyRepository.js';
 import { env } from '../config/env.js';
 import { createSheetsClient } from './googleSheetsClient.js';
+import { resolveSheetTitle } from './resolveSheetTitle.js';
 import { formatSheetRange } from './sheetRange.js';
-
-const SHEET_HEADER = [
-  'ID',
-  'Position Title',
-  'Company',
-  'URL',
-  'Email (HR)',
-  'Status',
-  'Type',
-  'Scraped At',
-] as const;
+import { SHEET_HEADER } from './sheetSchema.js';
 
 function buildSheetData(): (string | number)[][] {
   const repository = new VacancyRepository();
@@ -33,32 +23,6 @@ function buildSheetData(): (string | number)[][] {
       vacancy.createdAt,
     ]),
   ];
-}
-
-async function resolveSheetTitle(
-  sheets: sheets_v4.Sheets,
-  spreadsheetId: string,
-  requestedName: string,
-): Promise<string> {
-  const response = await sheets.spreadsheets.get({
-    spreadsheetId,
-    fields: 'sheets.properties.title',
-  });
-
-  const titles =
-    response.data.sheets
-      ?.map((sheet) => sheet.properties?.title)
-      .filter((title): title is string => Boolean(title)) ?? [];
-
-  const match = titles.find((title) => title === requestedName);
-
-  if (!match) {
-    throw new Error(
-      `Sheet tab "${requestedName}" not found. Available tabs: ${titles.join(', ') || '(none)'}`,
-    );
-  }
-
-  return match;
 }
 
 export async function syncDatabaseToSheets(): Promise<void> {

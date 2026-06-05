@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { validateStorageStateFile } from './authStatus.js';
 import { getContextOptions, launchBrowser } from './browser.js';
 
 const SITES = {
@@ -47,9 +48,11 @@ async function main(): Promise<void> {
   await context.storageState({ path: outPath });
   await browser.close();
 
+  const { cookieCount } = validateStorageStateFile(outPath);
   const envKey = site === 'indeed' ? 'INDEED_STORAGE_STATE' : 'LINKEDIN_STORAGE_STATE';
-  console.log(`\nСессия сохранена: ${outPath}`);
-  console.log(`Добавьте в .env:\n${envKey}=${outPath}\n`);
+  console.log(`\nСессия сохранена: ${outPath} (${cookieCount} cookies)`);
+  console.log(`Добавьте в .env (или оставьте путь по умолчанию — подхватится автоматически):`);
+  console.log(`${envKey}=${outPath}\n`);
 }
 
 main().catch((error: unknown) => {

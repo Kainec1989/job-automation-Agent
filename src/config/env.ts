@@ -75,8 +75,22 @@ const indeedBaseUrl = optionalEnv('INDEED_BASE_URL', 'https://de.indeed.com').re
 const stepstoneBaseUrl = optionalEnv('STEPSTONE_BASE_URL', 'https://www.stepstone.de').replace(/\/$/, '');
 const linkedinBaseUrl = optionalEnv('LINKEDIN_BASE_URL', 'https://www.linkedin.com').replace(/\/$/, '');
 const linkedinDistanceMiles = Number(optionalEnv('LINKEDIN_DISTANCE_MILES', '100'));
-const linkedinStorageStateRaw = process.env.LINKEDIN_STORAGE_STATE?.trim();
-const indeedStorageStateRaw = process.env.INDEED_STORAGE_STATE?.trim();
+function resolveStorageState(envKey: string, defaultRelative: string): string | null {
+  const configured = process.env[envKey]?.trim();
+  const resolvedPath = resolve(configured || defaultRelative);
+
+  if (existsSync(resolvedPath)) {
+    return resolvedPath;
+  }
+
+  return configured ? resolvedPath : null;
+}
+
+const linkedinStorageState = resolveStorageState(
+  'LINKEDIN_STORAGE_STATE',
+  './data/linkedin-auth.json',
+);
+const indeedStorageState = resolveStorageState('INDEED_STORAGE_STATE', './data/indeed-auth.json');
 const chromePath = process.env.CHROME_PATH?.trim()
   ? resolve(process.env.CHROME_PATH.trim())
   : null;
@@ -94,12 +108,12 @@ export const env = {
   stepstoneBaseUrl,
   linkedinBaseUrl,
   linkedinDistanceMiles,
-  linkedinStorageState: linkedinStorageStateRaw ? resolve(linkedinStorageStateRaw) : null,
-  indeedStorageState: indeedStorageStateRaw ? resolve(indeedStorageStateRaw) : null,
+  linkedinStorageState,
+  indeedStorageState,
   browserHeadless,
   fetchFullDescription,
   descriptionFetchDelayMs,
-  enabledScrapers: parseScraperList(optionalEnv('SCRAPERS', 'indeed,stepstone,linkedin')),
+  enabledScrapers: parseScraperList(optionalEnv('SCRAPERS', 'stepstone,linkedin')),
 
   indeedSearchUrls: [
     buildIndeedSearchUrl(keywordsJunior, searchLocation, searchRadiusKm, indeedBaseUrl),

@@ -50,8 +50,9 @@ npm run dispatch         # send applications (status=new + email in DB)
 | `npm run sheets:sync` | Push DB contents to Google Sheets |
 | `npm run sheets:import` | Pull emails and status from Google Sheets into DB |
 | `npm run lebenslauf:pdf` | Generate `assets/Lebenslauf.pdf` from `Lebenslauf.md` |
+| `npm run auth:linkedin` | Save LinkedIn login session (recommended) |
 | `npm run auth:indeed` | Save browser session for Indeed (anti-bot) |
-| `npm run auth:linkedin` | Save LinkedIn login session |
+| `npm run auth:status` | Check saved session files and cookie counts |
 
 ## Project Structure
 
@@ -65,11 +66,27 @@ src/
 └── tools/            # CV markdown → PDF
 ```
 
+## Scraping stability
+
+Indeed and LinkedIn often block headless browsers. Recommended setup:
+
+```bash
+npm run auth:linkedin   # log in once, saves ./data/linkedin-auth.json
+npm run auth:indeed     # optional — accept cookies on Indeed
+npm run auth:status     # verify session files
+npm run scrape
+```
+
+- Default `SCRAPERS=stepstone,linkedin` — Indeed disabled until session works
+- Session files in `./data/` are auto-detected even without `.env` paths
+- If you get 403: set `BROWSER_HEADLESS=false` or increase `SEARCH_DELAY_MS`
+
 ## Configuration
 
 See [`.env.example`](.env.example). Important variables:
 
-- `SCRAPERS` — e.g. `stepstone,linkedin` (Indeed often returns 403)
+- `SCRAPERS` — default `stepstone,linkedin`; add `indeed` after `auth:indeed`
+- `LINKEDIN_STORAGE_STATE` / `INDEED_STORAGE_STATE` — paths to saved sessions
 - `KEYWORDS_JUNIOR` / `KEYWORDS_PRAKTIKUM` — search terms
 - `SEARCH_LOCATION` / `SEARCH_RADIUS_KM` — default: Leipzig, 150 km
 - `FETCH_FULL_DESCRIPTION` — load full job text before classification

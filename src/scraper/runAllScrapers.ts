@@ -1,5 +1,6 @@
 import { closeDatabase } from '../database/db.js';
 import { env } from '../config/env.js';
+import { printScraperAuthWarnings } from './authStatus.js';
 import { launchBrowser, sleep } from './browser.js';
 import { indeedScraper } from './indeedScraper.js';
 import { stepstoneScraper } from './stepstoneScraper.js';
@@ -71,7 +72,9 @@ async function main(): Promise<void> {
     console.log(
       `Full description fetch: ${env.fetchFullDescription ? `on (${env.descriptionFetchDelayMs / 1000}s between jobs)` : 'off'}`,
     );
+    console.log(`Browser headless: ${env.browserHeadless}`);
 
+    printScraperAuthWarnings();
     resetClassificationStats();
     const vacancies = await runAllScrapers();
     printClassificationStats();

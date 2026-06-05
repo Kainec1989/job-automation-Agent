@@ -67,9 +67,13 @@ export function getContextOptions(storageStatePath?: string): BrowserContextOpti
     },
   };
 
-  if (storageStatePath && existsSync(storageStatePath)) {
-    options.storageState = storageStatePath;
-    console.log(`Using saved browser session: ${storageStatePath}`);
+  if (storageStatePath) {
+    if (existsSync(storageStatePath)) {
+      options.storageState = storageStatePath;
+      console.log(`Using saved browser session: ${storageStatePath}`);
+    } else {
+      console.warn(`[Browser] Session file not found: ${storageStatePath}`);
+    }
   }
 
   return options;

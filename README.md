@@ -55,6 +55,7 @@ npm run dispatch
 | `npm run auth:status` | Check saved session files and cookie counts |
 | `npm run tavily:enrich` | Tavily HR email lookup → save to DB |
 | `npm run pipeline:daily` | Full daily run (see below) |
+| `npm run test` | Unit tests (classifier, email, templates) |
 
 ## Daily pipeline
 

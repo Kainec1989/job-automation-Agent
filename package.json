@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "test": "node --import tsx --test tests/**/*.test.ts",
     "scrape": "tsx src/scraper/runAllScrapers.ts",
     "send:test": "tsx src/sender/emailService.ts",
     "dispatch": "tsx src/dispatcher/runDailyApplicationPipeline.ts",

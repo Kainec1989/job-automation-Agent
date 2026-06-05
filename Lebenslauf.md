@@ -25,12 +25,13 @@
 
 ## AUSGEWÄHLTE PROJEKTE
 
+* **Job Automation Agent** — [github.com/Kainec1989/job-automation-Agent](https://github.com/Kainec1989/job-automation-Agent)
+  * TypeScript-Pipeline zur Automatisierung der Jobsuche (Indeed, Stepstone, LinkedIn) mit Playwright.
+  * IT-Klassifikator, SQLite, Google-Sheets-Sync, E-Mail-Versand mit personalisiertem Anschreiben (PDF), Lebenslauf und DCI-Zertifikat.
+
 * **Water Reminder Telegram Bot** — [github.com/Kainec1989/water-reminder-bot](https://github.com/Kainec1989/water-reminder-bot)
   * Node.js-Bot mit Cron-Scheduling, Mehrsprachigkeit (DE/RU/EN), JSON-Persistenz und Deployment auf Render.
   * Telegram Bot API, strukturierte Commands (`/start`, `/stop`, `/next`), Graceful Shutdown.
-
-* **REST Blog API (MERN)** — [github.com/Kainec1989/Rest_blog](https://github.com/Kainec1989/Rest_blog)
-  * RESTful API für Blog-Posts mit Express.js und MongoDB (CRUD, modulare Backend-Architektur).
 
 * **Group React Project (DCI)** — [github.com/Kainec1989/group-react-project](https://github.com/Kainec1989/group-react-project)
   * Teamprojekt in der DCI-Weiterbildung: React-Frontend, komponentenbasierte UI, Git-Workflow im Gruppenprojekt.

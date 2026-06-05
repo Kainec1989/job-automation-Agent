@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+.env
+google-credentials.json
+*.db
+playwright-report/
+test-results/
+.DS_Store
+assets/*.pdf
+Lebenslauf_tmp.html

@@ -1,0 +1,36 @@
+{
+  "name": "job-automation",
+  "version": "0.1.0",
+  "description": "Job search automation: scraper + email sender",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "scrape": "tsx src/scraper/runAllScrapers.ts",
+    "send:test": "tsx src/sender/emailService.ts",
+    "dispatch": "tsx src/dispatcher/runDailyApplicationPipeline.ts",
+    "db:init": "tsx src/database/init.ts",
+    "sheets:sync": "tsx src/sheets/syncDatabaseToSheets.ts",
+    "lebenslauf:pdf": "tsx src/tools/generateLebenslaufPdf.ts",
+    "auth:indeed": "tsx src/scraper/saveBrowserAuth.ts indeed",
+    "auth:linkedin": "tsx src/scraper/saveBrowserAuth.ts linkedin"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.5.0",
+    "googleapis": "^173.0.0",
+    "nodemailer": "^7.0.3",
+    "pdfkit": "^0.18.0",
+    "playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.21",
+    "@types/nodemailer": "^6.4.17",
+    "@types/pdfkit": "^0.17.6",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

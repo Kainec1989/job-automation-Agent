@@ -106,6 +106,16 @@ const SUB_TECH = [
   'tool use',
 ] as const;
 
+/** Чужой стек в title или description (Indeed: «C#.NET» только в тексте) */
+const FOREIGN_STACK_REGEXES = [
+  /\bc#\b/i,
+  /\bc\s*#\s*\.?\s*net\b/i,
+  /\bcsharp\b/i,
+  /\b\.net\b/i,
+  /\basp\.net\b/i,
+  /\bvb\.net\b/i,
+] as const;
+
 const TITLE_BLACKLIST_REGEXES = [
   // Опыт / уровень
   /\bsenior\b/i,
@@ -115,10 +125,8 @@ const TITLE_BLACKLIST_REGEXES = [
   /\bteamleiter\b/i,
   /\bhead of\b/i,
   /\bjahre berufserfahrung\b/i,
-  // Чужой стек
+  // Чужой стек (только заголовок)
   /\bjava\b/i,
-  /\bc#\b/i,
-  /\b\.net\b/i,
   /\bphp\b/i,
   /\bc\+\+/i,
   /\bangular\b/i,
@@ -158,6 +166,7 @@ export type ClassificationStatsKey =
   | 'accepted_junior'
   | 'accepted_praktikum'
   | 'title_blacklist'
+  | 'foreign_stack_blacklist'
   | 'experience_blacklist'
   | 'non_it_blacklist'
   | 'sub_tech_only'
@@ -283,6 +292,16 @@ export function classifyVacancy(title: string, description?: string | null): Cla
       isFit: false,
       reason: `Title matches blacklist pattern: ${titleBlacklist}`,
       statsKey: 'title_blacklist',
+    };
+  }
+
+  const foreignStack = findRegexMatch(combinedText, FOREIGN_STACK_REGEXES);
+  if (foreignStack) {
+    return {
+      type: 'junior',
+      isFit: false,
+      reason: `Matches foreign stack blacklist: ${foreignStack}`,
+      statsKey: 'foreign_stack_blacklist',
     };
   }
 

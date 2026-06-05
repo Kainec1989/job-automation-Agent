@@ -1,0 +1,53 @@
+/** Job boards и агрегаторы — штраф в scoring, полный skip при сборе URL без email */
+export const AGGREGATOR_HOSTS = [
+  'linkedin.com',
+  'indeed.',
+  'stepstone.',
+  'xing.com',
+  'glassdoor.com',
+  'monster.de',
+  'arbeitnow.com',
+  'remoterocketship.com',
+  'weworkremotely.com',
+  'wellfound.com',
+  'angel.co',
+  'vuejobs.com',
+  'expertini.com',
+  'trabajo.org',
+  'jobzentrale',
+  'jooble.',
+  'talent.com',
+  'ziprecruiter.com',
+  'simplyhired.',
+  'dice.com',
+  'hired.com',
+  'otta.com',
+  'arbeitgeber.de',
+  'careers.sh',
+  'reddit.com',
+] as const;
+
+export const CAREER_URL_HINTS =
+  /karriere|career|jobs?\/|bewerbung|stellen|impressum|kontakt|ueber-uns|about|unternehmen|team|personal|recruiting/i;
+
+export const EXCLUDE_SEARCH_DOMAINS = [
+  'linkedin.com',
+  'indeed.com',
+  'stepstone.de',
+  'stepstone.com',
+  'xing.com',
+  'glassdoor.com',
+  'monster.de',
+  'arbeitnow.com',
+  'remoterocketship.com',
+  'weworkremotely.com',
+  'wellfound.com',
+  'vuejobs.com',
+  'expertini.com',
+  'trabajo.org',
+  'jooble.com',
+  'talent.com',
+  'ziprecruiter.com',
+  'careers.sh',
+  'reddit.com',
+] as const;

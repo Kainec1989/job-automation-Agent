@@ -62,34 +62,44 @@ export async function runAllScrapers(): Promise<ScrapedVacancy[]> {
   return [...merged.values()];
 }
 
+function logScraperSettings(): void {
+  console.log(`Enabled scrapers: ${env.enabledScrapers.join(', ')}`);
+  console.log(`Junior keywords: ${env.keywordsJunior.join(', ')}`);
+  console.log(`Praktikum keywords: ${env.keywordsPraktikum.join(', ')}`);
+  console.log(`Search location: ${env.searchLocation} (radius ${env.searchRadiusKm} km)`);
+  console.log(`Delay between searches: ${env.searchDelayMs / 1000}s`);
+  console.log(
+    `Full description fetch: ${env.fetchFullDescription ? `on (${env.descriptionFetchDelayMs / 1000}s between jobs)` : 'off'}`,
+  );
+  console.log(`Email extraction: ${env.extractEmail ? 'on' : 'off'}`);
+  console.log(`Pagination: ${env.scrapeMaxPages} page(s), ${env.scrapePageDelayMs / 1000}s between pages`);
+  console.log(`Browser headless: ${env.browserHeadless}`);
+}
+
+export async function scrapeAndPersist(): Promise<number> {
+  logScraperSettings();
+  printScraperAuthWarnings();
+  resetClassificationStats();
+
+  const vacancies = await runAllScrapers();
+  printClassificationStats();
+
+  for (const vacancy of vacancies) {
+    console.log(`- [${vacancy.type}] [${vacancy.company}] ${vacancy.title} → ${vacancy.url}`);
+  }
+
+  if (vacancies.length > 0) {
+    await persistVacancies(vacancies);
+  } else {
+    console.log('No vacancies collected.');
+  }
+
+  return vacancies.length;
+}
+
 async function main(): Promise<void> {
   try {
-    console.log(`Enabled scrapers: ${env.enabledScrapers.join(', ')}`);
-    console.log(`Junior keywords: ${env.keywordsJunior.join(', ')}`);
-    console.log(`Praktikum keywords: ${env.keywordsPraktikum.join(', ')}`);
-    console.log(`Search location: ${env.searchLocation} (radius ${env.searchRadiusKm} km)`);
-    console.log(`Delay between searches: ${env.searchDelayMs / 1000}s`);
-    console.log(
-      `Full description fetch: ${env.fetchFullDescription ? `on (${env.descriptionFetchDelayMs / 1000}s between jobs)` : 'off'}`,
-    );
-    console.log(`Email extraction: ${env.extractEmail ? 'on' : 'off'}`);
-    console.log(`Pagination: ${env.scrapeMaxPages} page(s), ${env.scrapePageDelayMs / 1000}s between pages`);
-    console.log(`Browser headless: ${env.browserHeadless}`);
-
-    printScraperAuthWarnings();
-    resetClassificationStats();
-    const vacancies = await runAllScrapers();
-    printClassificationStats();
-
-    for (const vacancy of vacancies) {
-      console.log(`- [${vacancy.type}] [${vacancy.company}] ${vacancy.title} → ${vacancy.url}`);
-    }
-
-    if (vacancies.length > 0) {
-      await persistVacancies(vacancies);
-    } else {
-      console.log('No vacancies collected.');
-    }
+    await scrapeAndPersist();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Scraper pipeline failed: ${message}`);

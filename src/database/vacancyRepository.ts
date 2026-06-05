@@ -133,6 +133,59 @@ export class VacancyRepository {
     return rows.map(mapRow);
   }
 
+  findNewWithoutEmail(limit: number): Array<Pick<Vacancy, 'id' | 'title' | 'company' | 'url'>> {
+    return this.findNewWithoutEmailFiltered({ limit });
+  }
+
+  findNewWithoutEmailFiltered(options: {
+    limit: number;
+    company?: string;
+  }): Array<Pick<Vacancy, 'id' | 'title' | 'company' | 'url'>> {
+    const db = getDatabase();
+    const company = options.company?.trim();
+
+    if (company) {
+      return db
+        .prepare(`
+          SELECT id, title, company, url
+          FROM vacancies
+          WHERE status = 'new'
+            AND (email IS NULL OR trim(email) = '')
+            AND lower(company) = lower(?)
+          ORDER BY created_at DESC
+          LIMIT ?
+        `)
+        .all(company, options.limit) as Array<Pick<Vacancy, 'id' | 'title' | 'company' | 'url'>>;
+    }
+
+    return db
+      .prepare(`
+        SELECT id, title, company, url
+        FROM vacancies
+        WHERE status = 'new'
+          AND (email IS NULL OR trim(email) = '')
+        ORDER BY created_at DESC
+        LIMIT ?
+      `)
+      .all(options.limit) as Array<Pick<Vacancy, 'id' | 'title' | 'company' | 'url'>>;
+  }
+
+  updateEmailIfNew(id: number, email: string): boolean {
+    const db = getDatabase();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET email = ?, updated_at = datetime('now')
+        WHERE id = ?
+          AND status = 'new'
+          AND (email IS NULL OR trim(email) = '')
+      `)
+      .run(email.trim(), id);
+
+    return result.changes > 0;
+  }
+
   findPendingWithEmail(limit: number): PendingVacancy[] {
     const db = getDatabase();
 
@@ -187,6 +240,22 @@ export class VacancyRepository {
     }
 
     return true;
+  }
+
+  updateJobFields(id: number, title: string, company: string): void {
+    const db = getDatabase();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET title = ?, company = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `)
+      .run(title, company, id);
+
+    if (result.changes === 0) {
+      throw new Error(`Vacancy not found: id=${id}`);
+    }
   }
 
   updateType(id: number, type: VacancyType): void {

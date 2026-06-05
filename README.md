@@ -32,12 +32,12 @@ cp .env.example .env
 # Edit .env — SMTP, search keywords, paths
 
 npm run db:init
-npm run scrape
-npm run sheets:sync      # export DB → Google Sheets
-# Fill "Email (HR)" column in the sheet, then:
-npm run sheets:import    # import emails (and status) → DB
 npm run send:test        # test SMTP + PDF attachments
-npm run dispatch         # send applications (status=new + email in DB)
+npm run pipeline:daily   # scrape → reclassify → sheets → tavily → dispatch
+# Or step by step:
+npm run scrape
+npm run tavily:enrich -- --limit 5
+npm run dispatch
 ```
 
 ## Main Scripts
@@ -53,6 +53,58 @@ npm run dispatch         # send applications (status=new + email in DB)
 | `npm run auth:linkedin` | Save LinkedIn login session (recommended) |
 | `npm run auth:indeed` | Save browser session for Indeed (anti-bot) |
 | `npm run auth:status` | Check saved session files and cookie counts |
+| `npm run tavily:enrich` | Tavily HR email lookup → save to DB |
+| `npm run pipeline:daily` | Full daily run (see below) |
+
+## Daily pipeline
+
+One command for the full workflow:
+
+```bash
+npm run pipeline:daily
+```
+
+Steps (in order):
+
+1. **Scrape** — job boards → classify → SQLite
+2. **Reclassify** — archive misfits, clean titles
+3. **Sheets sync** — export DB (if `GOOGLE_SPREADSHEET_ID` set)
+4. **Tavily enrich** — find HR emails (if `TAVILY_ENABLED=true` + API key)
+5. **Dispatch** — send applications (`DISPATCH_LIMIT` per run)
+
+Skip individual steps:
+
+```bash
+npm run pipeline:daily -- --skip-scrape --skip-dispatch   # enrich + sync only
+npm run pipeline:daily -- --skip-tavily                   # no Tavily API calls
+```
+
+Cron example (06:00 daily):
+
+```cron
+0 6 * * * cd /home/vlad/Agent && npm run pipeline:daily >> /home/vlad/Agent/logs/pipeline.log 2>&1
+```
+
+## Tavily (HR email lookup)
+
+When job pages have no contact email, [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search) can find company career/impressum pages.
+
+1. Create an API key at [app.tavily.com](https://app.tavily.com/)
+2. Add `TAVILY_API_KEY=tvly-...` to `.env`
+3. Test:
+
+```bash
+# One company
+npm run tavily:lookup -- --company "thor consulting GmbH" --title "TypeScript Developer"
+
+# Enrich top N DB vacancies (writes email to DB, syncs Sheets if configured)
+npm run tavily:enrich -- --limit 3
+
+# Preview without API calls / DB writes
+npm run tavily:enrich -- --limit 5 --dry-run
+```
+
+Settings: `TAVILY_SEARCH_DEPTH` (`basic` = 1 credit), `TAVILY_MAX_RESULTS`, `TAVILY_MAX_LOOKUPS`, `TAVILY_MAX_QUERIES_PER_LOOKUP`, `TAVILY_EXTRACT_ENABLED` (fetch impressum/karriere pages when search snippets lack email), `TAVILY_MAX_EXTRACT_URLS`.
 
 ## Project Structure
 
@@ -63,7 +115,9 @@ src/
 ├── sender/           # Anschreiben templates, email, PDF
 ├── dispatcher/       # Application pipeline
 ├── sheets/           # Google Sheets sync
-└── tools/            # CV markdown → PDF
+├── enrichment/       # Tavily email lookup
+├── pipeline/         # Daily orchestration
+└── tools/            # CV markdown → PDF, Tavily CLI
 ```
 
 ## Scraping stability

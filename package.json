@@ -8,6 +8,7 @@
     "scrape": "tsx src/scraper/runAllScrapers.ts",
     "send:test": "tsx src/sender/emailService.ts",
     "dispatch": "tsx src/dispatcher/runDailyApplicationPipeline.ts",
+    "pipeline:daily": "tsx src/pipeline/runDailyPipeline.ts",
     "db:init": "tsx src/database/init.ts",
     "db:reclassify": "tsx src/tools/reclassifyVacancies.ts",
     "sheets:sync": "tsx src/sheets/syncDatabaseToSheets.ts",
@@ -15,7 +16,9 @@
     "lebenslauf:pdf": "tsx src/tools/generateLebenslaufPdf.ts",
     "auth:indeed": "tsx src/scraper/saveBrowserAuth.ts indeed",
     "auth:linkedin": "tsx src/scraper/saveBrowserAuth.ts linkedin",
-    "auth:status": "tsx src/scraper/authStatus.ts"
+    "auth:status": "tsx src/scraper/authStatus.ts",
+    "tavily:lookup": "tsx src/tools/tavilyLookup.ts",
+    "tavily:enrich": "tsx src/tools/tavilyLookup.ts"
   },
   "engines": {
     "node": ">=20.0.0"

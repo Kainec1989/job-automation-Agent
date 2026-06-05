@@ -1,5 +1,6 @@
 import type { Vacancy, VacancyType } from '../database/types.js';
 import { env } from '../config/env.js';
+import { sanitizeJobFields } from '../scraper/sanitizeJobFields.js';
 
 export interface AnschreibenContent {
   subject: string;
@@ -110,7 +111,17 @@ function formatBulletList(bullets: string[]): string {
 }
 
 function shortenTitleForSubject(title: string): string {
-  return title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  return sanitizeJobFields(title, '').title
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeVacancyFields(
+  vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+): Pick<Vacancy, 'title' | 'company' | 'type' | 'description'> {
+  const { title, company } = sanitizeJobFields(vacancy.title, vacancy.company);
+  return { ...vacancy, title, company };
 }
 
 function buildIntro(ctx: TemplateContext): string {
@@ -174,7 +185,7 @@ function renderTemplate(ctx: TemplateContext): AnschreibenContent {
   ];
 
   return {
-    subject: `Bewerbung als ${subjectSuffix} — ${ctx.applicantName}`,
+    subject: `Bewerbung als ${subjectSuffix} — ${ctx.company}`,
     text: paragraphs.join('\n'),
   };
 }
@@ -186,10 +197,10 @@ function shortenBulletForEmail(bullet: string): string {
 
 function getEmailAttachmentList(): string {
   if (env.dciCertificatePath) {
-    return 'Anschreiben (PDF), Lebenslauf und DCI-Abschlusszertifikat (Fullstack Web Developer)';
+    return 'Anschreiben, Lebenslauf und DCI-Abschlusszertifikat';
   }
 
-  return 'Anschreiben (PDF) und Lebenslauf';
+  return 'Anschreiben und Lebenslauf';
 }
 
 function buildEmailHook(ctx: TemplateContext): string {
@@ -204,11 +215,12 @@ function buildEmailHook(ctx: TemplateContext): string {
 export function buildEmailBody(
   vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
 ): string {
-  const templateType = selectTemplateType(vacancy.type);
+  const normalized = normalizeVacancyFields(vacancy);
+  const templateType = selectTemplateType(normalized.type);
   const ctx: TemplateContext = {
-    title: vacancy.title,
-    company: vacancy.company,
-    description: vacancy.description ?? null,
+    title: normalized.title,
+    company: normalized.company,
+    description: normalized.description ?? null,
     applicantName: env.applicantName,
     type: templateType,
   };
@@ -227,7 +239,7 @@ export function buildEmailBody(
     '',
     'Ich arbeite mit modernen AI-assisted Workflows (Cursor IDE), um effizient und qualitätsbewusst zu entwickeln.',
     '',
-    `Im Anhang: ${getEmailAttachmentList()}. Ein ausführliches Anschreiben finden Sie in der PDF-Datei.`,
+    `Im Anhang: ${getEmailAttachmentList()}.`,
     '',
     'Ich bin ab sofort verfügbar und freue mich auf Ihre Rückmeldung oder ein persönliches Gespräch.',
     '',
@@ -241,12 +253,13 @@ export function buildEmailBody(
 export function buildAnschreiben(
   vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
 ): AnschreibenContent {
-  const templateType = selectTemplateType(vacancy.type);
+  const normalized = normalizeVacancyFields(vacancy);
+  const templateType = selectTemplateType(normalized.type);
 
   return renderTemplate({
-    title: vacancy.title,
-    company: vacancy.company,
-    description: vacancy.description ?? null,
+    title: normalized.title,
+    company: normalized.company,
+    description: normalized.description ?? null,
     applicantName: env.applicantName,
     type: templateType,
   });

@@ -100,6 +100,10 @@ const descriptionFetchDelayMs = Number(optionalEnv('DESCRIPTION_FETCH_DELAY_MS',
 const extractEmail = optionalEnv('EXTRACT_EMAIL', 'true') !== 'false';
 const scrapeMaxPages = Number(optionalEnv('SCRAPE_MAX_PAGES', '3'));
 const scrapePageDelayMs = Number(optionalEnv('SCRAPE_PAGE_DELAY_MS', '5000'));
+const tavilyLookupDelayMs = Number(optionalEnv('TAVILY_LOOKUP_DELAY_MS', '1500'));
+const tavilyMaxQueriesPerLookup = Number(optionalEnv('TAVILY_MAX_QUERIES_PER_LOOKUP', '2'));
+const tavilyExtractEnabled = optionalEnv('TAVILY_EXTRACT_ENABLED', 'true') !== 'false';
+const tavilyMaxExtractUrls = Number(optionalEnv('TAVILY_MAX_EXTRACT_URLS', '3'));
 export const env = {
   databasePath: resolve(optionalEnv('DATABASE_PATH', './data/vacancies.db')),
 
@@ -148,7 +152,55 @@ export const env = {
   googleSpreadsheetId: optionalEnv('GOOGLE_SPREADSHEET_ID', ''),
   googleCredentialsPath: resolve(optionalEnv('GOOGLE_CREDENTIALS_PATH', './google-credentials.json')),
   googleSheetName: optionalEnv('GOOGLE_SHEET_NAME', 'Sheet1'),
+
+  tavilyLookupDelayMs,
+  tavilyMaxQueriesPerLookup,
+  tavilyExtractEnabled,
+  tavilyMaxExtractUrls,
 } as const;
+
+export interface TavilyConfig {
+  apiKey: string;
+  enabled: boolean;
+  searchDepth: 'basic' | 'advanced' | 'fast' | 'ultra-fast';
+  extractDepth: 'basic' | 'advanced';
+  maxResults: number;
+  maxLookups: number;
+  extractEnabled: boolean;
+  maxExtractUrls: number;
+}
+
+export function isTavilyConfigured(): boolean {
+  return Boolean(process.env.TAVILY_API_KEY?.trim());
+}
+
+export function getTavilyConfig(): TavilyConfig {
+  const apiKey = process.env.TAVILY_API_KEY?.trim() ?? '';
+
+  if (!apiKey) {
+    throw new Error('TAVILY_API_KEY is not set in .env');
+  }
+
+  const depth = optionalEnv('TAVILY_SEARCH_DEPTH', 'basic');
+  const allowedDepths = new Set(['basic', 'advanced', 'fast', 'ultra-fast']);
+  const searchDepth = allowedDepths.has(depth)
+    ? (depth as TavilyConfig['searchDepth'])
+    : 'basic';
+
+  const extractDepthRaw = optionalEnv('TAVILY_EXTRACT_DEPTH', 'basic');
+  const extractDepth = extractDepthRaw === 'advanced' ? 'advanced' : 'basic';
+
+  return {
+    apiKey,
+    enabled: optionalEnv('TAVILY_ENABLED', 'false') === 'true',
+    searchDepth,
+    extractDepth,
+    maxResults: Number(optionalEnv('TAVILY_MAX_RESULTS', '5')),
+    maxLookups: Number(optionalEnv('TAVILY_MAX_LOOKUPS', '5')),
+    extractEnabled: optionalEnv('TAVILY_EXTRACT_ENABLED', 'true') !== 'false',
+    maxExtractUrls: Number(optionalEnv('TAVILY_MAX_EXTRACT_URLS', '3')),
+  };
+}
 
 export interface SmtpConfig {
   host: string;

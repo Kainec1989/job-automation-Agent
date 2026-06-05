@@ -1,11 +1,13 @@
 import { closeDatabase } from '../database/db.js';
 import { VacancyRepository } from '../database/vacancyRepository.js';
+import { sanitizeJobFields } from '../scraper/sanitizeJobFields.js';
 import { classifyVacancy } from '../scraper/vacancyClassifier.js';
 
 export function reclassifyVacancies(): {
   processed: number;
   archived: number;
   typeUpdated: number;
+  fieldsCleaned: number;
   unchanged: number;
   skipped: number;
 } {
@@ -14,6 +16,7 @@ export function reclassifyVacancies(): {
 
   let archived = 0;
   let typeUpdated = 0;
+  let fieldsCleaned = 0;
   let unchanged = 0;
   let skipped = 0;
 
@@ -23,19 +26,26 @@ export function reclassifyVacancies(): {
       continue;
     }
 
-    const result = classifyVacancy(vacancy.title, vacancy.description);
+    const { title, company } = sanitizeJobFields(vacancy.title, vacancy.company);
+    if (title !== vacancy.title || company !== vacancy.company) {
+      repository.updateJobFields(vacancy.id, title, company);
+      fieldsCleaned += 1;
+      console.log(`[Clean] ${company}: ${title}`);
+    }
+
+    const result = classifyVacancy(title, vacancy.description);
 
     if (!result.isFit) {
       repository.markArchived(vacancy.id);
       archived += 1;
-      console.log(`[Archive] ${vacancy.company}: ${vacancy.title} — ${result.reason}`);
+      console.log(`[Archive] ${company}: ${title} — ${result.reason}`);
       continue;
     }
 
     if (result.type !== vacancy.type) {
       repository.updateType(vacancy.id, result.type);
       typeUpdated += 1;
-      console.log(`[Type] ${vacancy.company}: ${vacancy.type} → ${result.type}`);
+      console.log(`[Type] ${company}: ${vacancy.type} → ${result.type}`);
       continue;
     }
 
@@ -46,6 +56,7 @@ export function reclassifyVacancies(): {
     processed: vacancies.length,
     archived,
     typeUpdated,
+    fieldsCleaned,
     unchanged,
     skipped,
   };
@@ -59,6 +70,7 @@ async function main(): Promise<void> {
     console.log(`Total in DB: ${summary.processed}`);
     console.log(`Skipped (not new): ${summary.skipped}`);
     console.log(`Archived: ${summary.archived}`);
+    console.log(`Fields cleaned: ${summary.fieldsCleaned}`);
     console.log(`Type updated: ${summary.typeUpdated}`);
     console.log(`Unchanged: ${summary.unchanged}`);
     console.log(`Active (new): ${summary.unchanged + summary.typeUpdated}`);

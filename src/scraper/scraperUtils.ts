@@ -2,6 +2,7 @@ import type { BrowserContext } from 'playwright';
 import type { ScrapedVacancy } from '../database/types.js';
 import { recordClassification } from './classificationStats.js';
 import { fetchJobDetails } from './fetchJobDescription.js';
+import { sanitizeJobFields } from './sanitizeJobFields.js';
 import { classifyVacancy } from './vacancyClassifier.js';
 
 export async function processScrapedJobCard(
@@ -24,17 +25,18 @@ export function classifyScrapedVacancy(
   source: string,
   email: string | null = null,
 ): ScrapedVacancy | null {
-  const result = classifyVacancy(title, description);
+  const { title: cleanTitle, company: cleanCompany } = sanitizeJobFields(title, company);
+  const result = classifyVacancy(cleanTitle, description);
   recordClassification(source, result);
 
   if (!result.isFit) {
-    console.log(`[${source}] Skipped: ${title} at ${company} — ${result.reason}`);
+    console.log(`[${source}] Skipped: ${cleanTitle} at ${cleanCompany} — ${result.reason}`);
     return null;
   }
 
   return {
-    title,
-    company,
+    title: cleanTitle,
+    company: cleanCompany,
     url,
     description,
     email,

@@ -4,6 +4,7 @@ const STATS_LABELS: Record<ClassificationStatsKey, string> = {
   accepted_junior: 'Принято → junior',
   accepted_praktikum: 'Принято → praktikum',
   title_blacklist: 'Отклонено: title blacklist (уровень / чужой стек)',
+  foreign_stack_blacklist: 'Отклонено: foreign stack (C# / .NET)',
   experience_blacklist: 'Отклонено: experience blacklist (senior / lead)',
   non_it_blacklist: 'Отклонено: non-IT blacklist',
   sub_tech_only: 'Отклонено: только sub-tech, нет core',
@@ -49,6 +50,7 @@ export function printClassificationStats(): void {
     'non_it_blacklist',
     'sub_tech_only',
     'title_blacklist',
+    'foreign_stack_blacklist',
     'experience_blacklist',
   ];
   const rejected = rejectionKeys.reduce((sum, key) => sum + (totals.get(key) ?? 0), 0);

@@ -41,27 +41,43 @@ export async function scrapeLinkedInPage(page: Page, context: BrowserContext): P
 
   await dismissLinkedInModals(page);
 
+  try {
+    await page.waitForSelector('div[data-job-id], ul.jobs-search__results-list > li', {
+      timeout: 10_000,
+    });
+  } catch {
+    // continue — count check below
+  }
+
   const jobCards = page.locator(
-    'ul.jobs-search__results-list > li, div.job-search-card, li.jobs-search-results__list-item',
+    'div.job-card-container[data-job-id], li.jobs-search-results-list__list-item, ul.jobs-search__results-list > li, div.job-search-card',
   );
 
   const count = await jobCards.count();
   if (count === 0) {
-    console.warn('[LinkedIn] No job cards found. Login may be required — set LINKEDIN_STORAGE_STATE in .env');
+    console.warn('[LinkedIn] No job cards found. Login may be required — run: npm run auth:linkedin');
     return results;
   }
+
+  console.log(`[LinkedIn] Found ${count} job cards on page`);
 
   for (let i = 0; i < count; i++) {
     const card = jobCards.nth(i);
 
     try {
       const titleLocator = card
-        .locator('a[data-tracking-control-name="public_jobs_jserp-result_search-card"], h3 a, .job-card-list__title a')
+        .locator(
+          '.job-card-container__link, .job-card-list__title a, a[href*="/jobs/view/"], a[data-tracking-control-name="public_jobs_jserp-result_search-card"], h3 a',
+        )
         .first();
       const companyLocator = card
-        .locator('h4.base-search-card__subtitle, .job-card-container__company-name, a[data-tracking-control-name="public_jobs_jserp-result_job-search-card-subtitle"]')
+        .locator(
+          '.artdeco-entity-lockup__subtitle, h4.base-search-card__subtitle, .job-card-container__company-name, a[data-tracking-control-name="public_jobs_jserp-result_job-search-card-subtitle"]',
+        )
         .first();
-      const snippetLocator = card.locator('p.job-search-card__snippet, .job-card-container__description').first();
+      const snippetLocator = card
+        .locator('p.job-search-card__snippet, .job-card-container__description, .job-card-container__metadata-wrapper')
+        .first();
 
       const title = (await titleLocator.innerText({ timeout: 3_000 })).trim();
       const company = (await companyLocator.innerText({ timeout: 3_000 })).trim();

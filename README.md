@@ -90,6 +90,7 @@ See [`.env.example`](.env.example). Important variables:
 - `KEYWORDS_JUNIOR` / `KEYWORDS_PRAKTIKUM` — search terms
 - `SEARCH_LOCATION` / `SEARCH_RADIUS_KM` — default: Leipzig, 150 km
 - `FETCH_FULL_DESCRIPTION` — load full job text before classification
+- `EXTRACT_EMAIL` — parse HR emails from job pages into DB (default: on)
 - `CHROME_PATH` — e.g. `/usr/bin/google-chrome`
 - `DCI_CERTIFICATE_PATH` — optional 3rd PDF attachment
 

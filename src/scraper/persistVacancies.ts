@@ -13,22 +13,28 @@ export async function persistVacancies(vacancies: ScrapedVacancy[]): Promise<voi
       title: vacancy.title,
       company: vacancy.company,
       url: vacancy.url,
+      email: vacancy.email ?? null,
       description: vacancy.description,
       type: vacancy.type,
     });
 
+    const emailSuffix = vacancy.email ? ` → ${vacancy.email}` : '';
+
     if (existing) {
       updated += 1;
       console.log(
-        `[Scraper] Updated ${vacancy.type} vacancy: ${vacancy.title} at ${vacancy.company}`,
+        `[Scraper] Updated ${vacancy.type} vacancy: ${vacancy.title} at ${vacancy.company}${emailSuffix}`,
       );
     } else {
       inserted += 1;
       console.log(
-        `[Scraper] New ${vacancy.type} vacancy saved: ${vacancy.title} at ${vacancy.company}`,
+        `[Scraper] New ${vacancy.type} vacancy saved: ${vacancy.title} at ${vacancy.company}${emailSuffix}`,
       );
     }
   }
 
-  console.log(`Database sync complete. Inserted: ${inserted}, updated: ${updated}`);
+  const withEmail = vacancies.filter((vacancy) => vacancy.email).length;
+  console.log(
+    `Database sync complete. Inserted: ${inserted}, updated: ${updated}, with email: ${withEmail}`,
+  );
 }

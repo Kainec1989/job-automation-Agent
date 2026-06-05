@@ -16,7 +16,8 @@ export const VACANCIES_TABLE_SQL = `
     status      TEXT    NOT NULL DEFAULT 'new'
                         CHECK (status IN ('new', 'contacted', 'replied', 'rejected', 'archived')),
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    sent_at     TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_vacancies_status ON vacancies(status);
@@ -49,6 +50,22 @@ const MIGRATIONS: Migration[] = [
       }
 
       db.exec('CREATE INDEX IF NOT EXISTS idx_vacancies_type ON vacancies(type);');
+      return false;
+    },
+  },
+  {
+    id: '002_add_sent_at_column',
+    run(db) {
+      const columns = db.pragma('table_info(vacancies)') as Array<{ name: string }>;
+      const hasSentAt = columns.some((column) => column.name === 'sent_at');
+
+      if (!hasSentAt) {
+        console.log(`Running migration ${this.id}...`);
+        db.exec(`ALTER TABLE vacancies ADD COLUMN sent_at TEXT;`);
+        console.log(`Migration ${this.id} completed successfully.`);
+        return true;
+      }
+
       return false;
     },
   },

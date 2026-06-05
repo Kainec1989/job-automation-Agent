@@ -115,10 +115,14 @@ export async function syncSheetsToDatabase(): Promise<SheetsImportSummary> {
         const status = parseStatus(statusRaw);
         if (!status) {
           console.warn(`[Sheets Import] Invalid status "${statusRaw}" for id=${id}, skipped.`);
-        } else if (status !== vacancy.status) {
+        } else if (repository.canImportStatusFromSheets(vacancy.status, status)) {
           repository.updateStatus(id, status);
           summary.statusesUpdated += 1;
           console.log(`[Sheets Import] Status updated: id=${id} ${vacancy.status} → ${status}`);
+        } else if (status !== vacancy.status) {
+          console.warn(
+            `[Sheets Import] Skipped status downgrade for id=${id}: ${vacancy.status} → ${status}`,
+          );
         }
       }
     } catch (error) {

@@ -97,6 +97,7 @@ const chromePath = process.env.CHROME_PATH?.trim()
 const browserHeadless = optionalEnv('BROWSER_HEADLESS', 'true') !== 'false';
 const fetchFullDescription = optionalEnv('FETCH_FULL_DESCRIPTION', 'true') !== 'false';
 const descriptionFetchDelayMs = Number(optionalEnv('DESCRIPTION_FETCH_DELAY_MS', '3000'));
+const extractEmail = optionalEnv('EXTRACT_EMAIL', 'true') !== 'false';
 export const env = {
   databasePath: resolve(optionalEnv('DATABASE_PATH', './data/vacancies.db')),
 
@@ -113,6 +114,7 @@ export const env = {
   browserHeadless,
   fetchFullDescription,
   descriptionFetchDelayMs,
+  extractEmail,
   enabledScrapers: parseScraperList(optionalEnv('SCRAPERS', 'stepstone,linkedin')),
 
   indeedSearchUrls: [

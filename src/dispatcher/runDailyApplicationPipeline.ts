@@ -2,6 +2,7 @@ import { closeDatabase } from '../database/db.js';
 import { VacancyRepository } from '../database/vacancyRepository.js';
 import { env } from '../config/env.js';
 import { EmailService } from '../sender/emailService.js';
+import { syncDatabaseToSheets } from '../sheets/syncDatabaseToSheets.js';
 
 export async function runDailyApplicationPipeline(): Promise<void> {
   const repository = new VacancyRepository();
@@ -35,6 +36,17 @@ export async function runDailyApplicationPipeline(): Promise<void> {
     }
 
     console.log(`[Dispatcher] Done. Sent: ${sent}, failed: ${failed}`);
+
+    if (sent > 0 && env.googleSpreadsheetId) {
+      try {
+        console.log('[Dispatcher] Syncing updated statuses to Google Sheets...');
+        await syncDatabaseToSheets();
+        console.log('[Dispatcher] Google Sheets updated.');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Dispatcher] Google Sheets sync failed: ${message}`);
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Dispatcher] Pipeline failed: ${message}`);

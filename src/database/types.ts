@@ -10,6 +10,7 @@ export interface Vacancy {
   description: string | null;
   type: VacancyType;
   status: VacancyStatus;
+  sentAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +29,7 @@ export interface ScrapedVacancy {
   title: string;
   company: string;
   url: string;
+  email?: string | null;
   description?: string | null;
   type: VacancyType;
 }

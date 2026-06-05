@@ -1,7 +1,7 @@
 import type { BrowserContext } from 'playwright';
 import type { ScrapedVacancy } from '../database/types.js';
 import { recordClassification } from './classificationStats.js';
-import { fetchFullJobDescription } from './fetchJobDescription.js';
+import { fetchJobDetails } from './fetchJobDescription.js';
 import { classifyVacancy } from './vacancyClassifier.js';
 
 export async function processScrapedJobCard(
@@ -12,8 +12,8 @@ export async function processScrapedJobCard(
   snippet: string | null,
   source: string,
 ): Promise<ScrapedVacancy | null> {
-  const description = await fetchFullJobDescription(context, url, snippet);
-  return classifyScrapedVacancy(title, company, url, description, source);
+  const { description, email } = await fetchJobDetails(context, url, snippet);
+  return classifyScrapedVacancy(title, company, url, description, source, email);
 }
 
 export function classifyScrapedVacancy(
@@ -22,6 +22,7 @@ export function classifyScrapedVacancy(
   url: string,
   description: string | null,
   source: string,
+  email: string | null = null,
 ): ScrapedVacancy | null {
   const result = classifyVacancy(title, description);
   recordClassification(source, result);
@@ -36,6 +37,7 @@ export function classifyScrapedVacancy(
     company,
     url,
     description,
+    email,
     type: result.type,
   };
 }

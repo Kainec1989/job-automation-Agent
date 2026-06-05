@@ -16,6 +16,7 @@ interface VacancyRow {
   description: string | null;
   type: VacancyType;
   status: VacancyStatus;
+  sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,10 +31,13 @@ function mapRow(row: VacancyRow): Vacancy {
     description: row.description,
     type: row.type,
     status: row.status,
+    sentAt: row.sent_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
+
+const LOCKED_STATUSES = new Set<VacancyStatus>(['contacted', 'replied', 'rejected', 'archived']);
 
 export class VacancyRepository {
   insert(input: CreateVacancyInput): Vacancy {
@@ -80,6 +84,11 @@ export class VacancyRepository {
         email = COALESCE(excluded.email, vacancies.email),
         description = COALESCE(excluded.description, vacancies.description),
         type = excluded.type,
+        status = CASE
+          WHEN vacancies.status IN ('contacted', 'replied', 'rejected', 'archived')
+          THEN vacancies.status
+          ELSE excluded.status
+        END,
         updated_at = datetime('now')
       RETURNING *
     `);
@@ -146,14 +155,38 @@ export class VacancyRepository {
     const result = db
       .prepare(`
         UPDATE vacancies
-        SET status = 'contacted', updated_at = datetime('now')
+        SET status = 'contacted',
+            sent_at = datetime('now'),
+            updated_at = datetime('now')
         WHERE id = ?
+          AND status = 'new'
       `)
       .run(id);
 
     if (result.changes === 0) {
-      throw new Error(`Vacancy not found: id=${id}`);
+      const existing = this.findById(id);
+      if (!existing) {
+        throw new Error(`Vacancy not found: id=${id}`);
+      }
+
+      if (existing.status === 'contacted') {
+        return;
+      }
+
+      throw new Error(`Cannot mark as contacted: id=${id} has status=${existing.status}`);
     }
+  }
+
+  canImportStatusFromSheets(current: VacancyStatus, incoming: VacancyStatus): boolean {
+    if (current === incoming) {
+      return false;
+    }
+
+    if (LOCKED_STATUSES.has(current) && incoming === 'new') {
+      return false;
+    }
+
+    return true;
   }
 
   updateType(id: number, type: VacancyType): void {

@@ -1,6 +1,12 @@
 import type { BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import { sleep } from './browser.js';
+import { extractEmailFromTexts, extractEmailsFromText, pickBestEmail } from './extractEmail.js';
+
+export interface JobDetails {
+  description: string | null;
+  email: string | null;
+}
 
 const MAX_DESCRIPTION_LENGTH = 8000;
 const MIN_USEFUL_TEXT_LENGTH = 80;
@@ -121,13 +127,71 @@ async function extractDescription(page: Page, url: string): Promise<string | nul
   return extractGenericDescription(page);
 }
 
-export async function fetchFullJobDescription(
+async function extractMailtoEmails(page: Page): Promise<string[]> {
+  try {
+    const hrefs = await page.locator('a[href^="mailto:"]').evaluateAll((links) =>
+      links
+        .map((link) => link.getAttribute('href') ?? '')
+        .filter(Boolean),
+    );
+
+    return hrefs
+      .map((href) => href.replace(/^mailto:/i, '').split('?')[0]?.trim() ?? '')
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function extractPageText(page: Page, url: string): Promise<string | null> {
+  const description = await extractDescription(page, url);
+  if (description) {
+    return description;
+  }
+
+  try {
+    const bodyText = await page.locator('body').innerText({ timeout: 4_000 });
+    return bodyText.replace(/\s+/g, ' ').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildJobDetails(
+  snippet: string | null,
+  pageText: string | null,
+  mailtoEmails: string[],
+): JobDetails {
+  const description = env.fetchFullDescription
+    ? mergeDescriptions(snippet, pageText)
+    : snippet;
+
+  const email = env.extractEmail
+    ? pickBestEmail([
+        ...mailtoEmails,
+        ...extractEmailsFromText(description),
+        ...extractEmailsFromText(pageText),
+        ...extractEmailsFromText(snippet),
+      ])
+    : null;
+
+  return { description, email };
+}
+
+export async function fetchJobDetails(
   context: BrowserContext,
   url: string,
   snippet: string | null,
-): Promise<string | null> {
-  if (!env.fetchFullDescription) {
-    return snippet;
+): Promise<JobDetails> {
+  if (!env.fetchFullDescription && !env.extractEmail) {
+    return { description: snippet, email: null };
+  }
+
+  if (!env.fetchFullDescription && env.extractEmail) {
+    return {
+      description: snippet,
+      email: extractEmailFromTexts(snippet),
+    };
   }
 
   let detailPage: Page | null = null;
@@ -140,27 +204,42 @@ export async function fetchFullJobDescription(
     });
 
     if (!response?.ok()) {
-      return snippet;
+      return buildJobDetails(snippet, null, []);
     }
 
     await detailPage.waitForTimeout(1_500);
-    const fullText = await extractDescription(detailPage, url);
-    const merged = mergeDescriptions(snippet, fullText);
+    const pageText = await extractPageText(detailPage, url);
+    const mailtoEmails = env.extractEmail ? await extractMailtoEmails(detailPage) : [];
+    const details = buildJobDetails(snippet, pageText, mailtoEmails);
 
-    if (fullText && merged && merged.length > (snippet?.length ?? 0)) {
-      console.log(`[Description] Enriched (${merged.length} chars): ${url}`);
+    if (pageText && details.description && details.description.length > (snippet?.length ?? 0)) {
+      console.log(`[Description] Enriched (${details.description.length} chars): ${url}`);
+    }
+
+    if (details.email) {
+      console.log(`[Email] Found ${details.email}: ${url}`);
     }
 
     if (env.descriptionFetchDelayMs > 0) {
       await sleep(env.descriptionFetchDelayMs);
     }
 
-    return merged;
+    return details;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[Description] Failed for ${url}: ${message}`);
-    return snippet;
+    return buildJobDetails(snippet, null, []);
   } finally {
     await detailPage?.close();
   }
+}
+
+/** @deprecated Используй fetchJobDetails */
+export async function fetchFullJobDescription(
+  context: BrowserContext,
+  url: string,
+  snippet: string | null,
+): Promise<string | null> {
+  const details = await fetchJobDetails(context, url, snippet);
+  return details.description;
 }

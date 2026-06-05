@@ -24,6 +24,7 @@ export function mergeVacancies(
     target.set(vacancy.url, {
       ...existing,
       description: combinedDescription || null,
+      email: vacancy.email ?? existing.email ?? null,
       type: result.type,
     });
   }

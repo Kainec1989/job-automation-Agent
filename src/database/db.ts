@@ -69,6 +69,30 @@ const MIGRATIONS: Migration[] = [
       return false;
     },
   },
+  {
+    id: '003_tavily_email_cache',
+    run(db) {
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tavily_email_cache'")
+        .get() as { name: string } | undefined;
+
+      if (!tables) {
+        console.log(`Running migration ${this.id}...`);
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS tavily_email_cache (
+            company_key   TEXT PRIMARY KEY,
+            email         TEXT,
+            source_url    TEXT,
+            looked_up_at  TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+        `);
+        console.log(`Migration ${this.id} completed successfully.`);
+        return true;
+      }
+
+      return false;
+    },
+  },
 ];
 
 let db: Database.Database | null = null;

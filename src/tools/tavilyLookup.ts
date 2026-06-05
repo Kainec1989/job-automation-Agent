@@ -129,6 +129,9 @@ async function main(): Promise<void> {
     console.log(`Saved to DB: ${summary.saved}`);
     console.log(`Not found: ${summary.notFound}`);
     console.log(`Failed: ${summary.failed}`);
+    if (summary.cacheHits > 0) {
+      console.log(`Cache hits: ${summary.cacheHits}`);
+    }
     if (summary.skipped > 0) {
       console.log(`Skipped: ${summary.skipped}`);
     }

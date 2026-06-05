@@ -2,7 +2,9 @@ import { VacancyRepository } from '../../database/vacancyRepository.js';
 import { env } from '../../config/env.js';
 import { sleep } from '../../scraper/browser.js';
 import { syncDatabaseToSheets } from '../../sheets/syncDatabaseToSheets.js';
+import { isPlausibleHrEmail } from '../../scraper/hrEmailValidation.js';
 import { TavilyApiError } from './client.js';
+import { getTavilyEmailCache, setTavilyEmailCache } from './emailCache.js';
 import { lookupHrEmail } from './emailLookup.js';
 import type { TavilyEmailLookupResult } from './types.js';
 
@@ -12,6 +14,7 @@ export interface TavilyEnrichmentSummary {
   notFound: number;
   failed: number;
   skipped: number;
+  cacheHits: number;
 }
 
 export interface TavilyEnrichmentOptions {
@@ -37,6 +40,7 @@ export async function enrichVacanciesWithTavily(
     notFound: 0,
     failed: 0,
     skipped: 0,
+    cacheHits: 0,
   };
 
   if (vacancies.length === 0) {
@@ -52,15 +56,41 @@ export async function enrichVacanciesWithTavily(
     summary.processed += 1;
 
     try {
-      const result = await lookupHrEmail({
-        company: vacancy.company,
-        title: vacancy.title,
-        jobUrl: vacancy.url,
-      });
+      const cached = getTavilyEmailCache(vacancy.company);
+      let result: TavilyEmailLookupResult;
+
+      if (cached) {
+        result = {
+          email: cached.email,
+          query: 'cache',
+          strategy: 'cache',
+          queriesAttempted: [],
+          extractedUrls: [],
+          sourceUrl: cached.sourceUrl,
+          candidates: cached.email ? [cached.email] : [],
+          results: [],
+        };
+        summary.cacheHits += 1;
+      } else {
+        result = await lookupHrEmail({
+          company: vacancy.company,
+          title: vacancy.title,
+          jobUrl: vacancy.url,
+        });
+
+        const cacheEmail =
+          result.email && isPlausibleHrEmail(result.email, vacancy.company)
+            ? result.email
+            : null;
+        setTavilyEmailCache(vacancy.company, cacheEmail, result.sourceUrl);
+      }
 
       let saved = false;
-      if (result.email) {
-        saved = repository.updateEmailIfNew(vacancy.id, result.email);
+      const email =
+        result.email && isPlausibleHrEmail(result.email, vacancy.company) ? result.email : null;
+
+      if (email) {
+        saved = repository.updateEmailIfNew(vacancy.id, email);
         if (saved) {
           summary.saved += 1;
         }
@@ -70,7 +100,7 @@ export async function enrichVacanciesWithTavily(
 
       options.onResult?.(`${vacancy.company} — ${vacancy.title}`, result, saved);
 
-      if (env.tavilyLookupDelayMs > 0) {
+      if (!cached && env.tavilyLookupDelayMs > 0) {
         await sleep(env.tavilyLookupDelayMs);
       }
     } catch (error) {

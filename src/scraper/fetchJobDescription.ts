@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import { sleep } from './browser.js';
-import { extractEmailFromTexts, extractEmailsFromText, pickBestEmail } from './extractEmail.js';
+import { extractHrEmailFromTexts } from './hrEmailValidation.js';
 
 export interface JobDetails {
   description: string | null;
@@ -161,18 +161,14 @@ function buildJobDetails(
   snippet: string | null,
   pageText: string | null,
   mailtoEmails: string[],
+  company?: string | null,
 ): JobDetails {
   const description = env.fetchFullDescription
     ? mergeDescriptions(snippet, pageText)
     : snippet;
 
   const email = env.extractEmail
-    ? pickBestEmail([
-        ...mailtoEmails,
-        ...extractEmailsFromText(description),
-        ...extractEmailsFromText(pageText),
-        ...extractEmailsFromText(snippet),
-      ])
+    ? extractHrEmailFromTexts(company, ...mailtoEmails, description, pageText, snippet)
     : null;
 
   return { description, email };
@@ -182,6 +178,7 @@ export async function fetchJobDetails(
   context: BrowserContext,
   url: string,
   snippet: string | null,
+  company?: string | null,
 ): Promise<JobDetails> {
   if (!env.fetchFullDescription && !env.extractEmail) {
     return { description: snippet, email: null };
@@ -190,7 +187,7 @@ export async function fetchJobDetails(
   if (!env.fetchFullDescription && env.extractEmail) {
     return {
       description: snippet,
-      email: extractEmailFromTexts(snippet),
+      email: extractHrEmailFromTexts(company, snippet),
     };
   }
 
@@ -204,13 +201,13 @@ export async function fetchJobDetails(
     });
 
     if (!response?.ok()) {
-      return buildJobDetails(snippet, null, []);
+      return buildJobDetails(snippet, null, [], company);
     }
 
     await detailPage.waitForTimeout(1_500);
     const pageText = await extractPageText(detailPage, url);
     const mailtoEmails = env.extractEmail ? await extractMailtoEmails(detailPage) : [];
-    const details = buildJobDetails(snippet, pageText, mailtoEmails);
+    const details = buildJobDetails(snippet, pageText, mailtoEmails, company);
 
     if (pageText && details.description && details.description.length > (snippet?.length ?? 0)) {
       console.log(`[Description] Enriched (${details.description.length} chars): ${url}`);
@@ -228,7 +225,7 @@ export async function fetchJobDetails(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[Description] Failed for ${url}: ${message}`);
-    return buildJobDetails(snippet, null, []);
+    return buildJobDetails(snippet, null, [], company);
   } finally {
     await detailPage?.close();
   }

@@ -162,11 +162,36 @@ const NON_IT_BLACKLIST_REGEXES = [
   /\bunternehmensberatung/i,
 ] as const;
 
+const RECRUITER_COMPANY_REGEXES = [
+  /crossing hurdles/i,
+  /hire feed/i,
+  /\bmercor\b/i,
+  /jobtensor/i,
+  /\bsme careers\b/i,
+  /expertini/i,
+  /\bturing\b/i,
+  /remoterocketship/i,
+  /weworkremotely/i,
+] as const;
+
+const REMOTE_US_TITLE_REGEXES = [
+  /\|\s*remote\b/i,
+  /\$\d+/,
+  /\bus only\b/i,
+  /\bwork from anywhere\b/i,
+  /\bworldwide remote\b/i,
+] as const;
+
+function isLikelyGermanEmployer(company: string): boolean {
+  return /\b(gmbh|ag|ug|kg|gruppe|se)\b/i.test(company);
+}
+
 export type ClassificationStatsKey =
   | 'accepted_junior'
   | 'accepted_praktikum'
   | 'title_blacklist'
   | 'foreign_stack_blacklist'
+  | 'recruiter_blacklist'
   | 'experience_blacklist'
   | 'non_it_blacklist'
   | 'sub_tech_only'
@@ -267,6 +292,27 @@ function hasItSignalInTitle(title: string): boolean {
   return /\binformatik/i.test(title) || /\bdigital/i.test(title);
 }
 
+function findRecruiterBlacklistMatch(
+  title: string,
+  company: string,
+): string | null {
+  for (const regex of RECRUITER_COMPANY_REGEXES) {
+    if (regex.test(company)) {
+      return regex.source;
+    }
+  }
+
+  if (!isLikelyGermanEmployer(company)) {
+    for (const regex of REMOTE_US_TITLE_REGEXES) {
+      if (regex.test(title)) {
+        return regex.source;
+      }
+    }
+  }
+
+  return null;
+}
+
 function findNonItBlacklistMatch(title: string, combinedText: string): string | null {
   const titleMatch = findRegexMatch(title, NON_IT_BLACKLIST_REGEXES);
   if (titleMatch) {
@@ -280,10 +326,25 @@ function findNonItBlacklistMatch(title: string, combinedText: string): string | 
   return findRegexMatch(combinedText, NON_IT_BLACKLIST_REGEXES);
 }
 
-export function classifyVacancy(title: string, description?: string | null): ClassificationResult {
+export function classifyVacancy(
+  title: string,
+  description?: string | null,
+  company?: string | null,
+): ClassificationResult {
   const cleanTitle = title.toLowerCase();
+  const cleanCompany = (company ?? '').toLowerCase();
   const cleanDescription = (description ?? '').toLowerCase();
   const combinedText = `${cleanTitle} ${cleanDescription}`;
+
+  const recruiterBlacklist = findRecruiterBlacklistMatch(cleanTitle, cleanCompany);
+  if (recruiterBlacklist) {
+    return {
+      type: 'junior',
+      isFit: false,
+      reason: `Matches recruiter/remote-agency blacklist: ${recruiterBlacklist}`,
+      statsKey: 'recruiter_blacklist',
+    };
+  }
 
   const titleBlacklist = findTitleBlacklistMatch(cleanTitle);
   if (titleBlacklist) {

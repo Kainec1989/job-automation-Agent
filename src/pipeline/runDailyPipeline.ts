@@ -127,7 +127,8 @@ export async function runDailyPipeline(
     });
     console.log(
       `[Pipeline] Tavily: processed ${summary.tavily.processed}, ` +
-        `saved ${summary.tavily.saved}, not found ${summary.tavily.notFound}.\n`,
+        `saved ${summary.tavily.saved}, not found ${summary.tavily.notFound}` +
+        `${summary.tavily.cacheHits > 0 ? `, cache hits ${summary.tavily.cacheHits}` : ''}.\n`,
     );
 
     if (!options.skipSheets && summary.tavily.saved > 0) {

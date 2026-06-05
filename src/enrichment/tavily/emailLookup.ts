@@ -1,5 +1,6 @@
 import { env } from '../../config/env.js';
 import { extractEmailsFromText, pickBestEmail } from '../../scraper/extractEmail.js';
+import { isPlausibleHrEmail } from '../../scraper/hrEmailValidation.js';
 import { AGGREGATOR_HOSTS, CAREER_URL_HINTS } from './constants.js';
 import { emailMatchesCompanyDomain, companySlug } from './companyMatch.js';
 import { tavilySearch } from './client.js';
@@ -200,6 +201,10 @@ export async function lookupHrEmail(input: TavilyEmailLookupInput): Promise<Tavi
     } else if (extractResult.candidates.length > bestCandidates.length) {
       bestCandidates = extractResult.candidates;
     }
+  }
+
+  if (bestEmail && !isPlausibleHrEmail(bestEmail, input.company)) {
+    bestEmail = null;
   }
 
   return {

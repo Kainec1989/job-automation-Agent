@@ -1,6 +1,7 @@
 import { closeDatabase } from '../database/db.js';
 import { VacancyRepository } from '../database/vacancyRepository.js';
 import { env } from '../config/env.js';
+import { isPlausibleHrEmail } from '../scraper/hrEmailValidation.js';
 import { EmailService } from '../sender/emailService.js';
 import { syncDatabaseToSheets } from '../sheets/syncDatabaseToSheets.js';
 
@@ -27,6 +28,14 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
   await emailService.verifyConnection();
 
   for (const job of pendingJobs) {
+    if (!isPlausibleHrEmail(job.email, job.company)) {
+      console.warn(
+        `[Dispatcher] Skipping invalid email ${job.email} for ${job.company} (id=${job.id})`,
+      );
+      repository.clearEmail(job.id);
+      continue;
+    }
+
     try {
       await emailService.sendApplicationEmail(job, job.email);
       repository.markContacted(job.id);

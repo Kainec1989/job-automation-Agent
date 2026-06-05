@@ -14,7 +14,7 @@ export function mergeVacancies(
     }
 
     const combinedDescription = [existing.description, vacancy.description].filter(Boolean).join(' ');
-    const result = classifyVacancy(existing.title, combinedDescription);
+    const result = classifyVacancy(existing.title, combinedDescription, existing.company);
 
     if (!result.isFit) {
       // Не удаляем уже принятую вакансию — merge мог добавить текст с blacklist-словами

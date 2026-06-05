@@ -1,5 +1,6 @@
 import { closeDatabase } from '../database/db.js';
 import { VacancyRepository } from '../database/vacancyRepository.js';
+import { isPlausibleHrEmail } from '../scraper/hrEmailValidation.js';
 import { sanitizeJobFields } from '../scraper/sanitizeJobFields.js';
 import { classifyVacancy } from '../scraper/vacancyClassifier.js';
 
@@ -8,6 +9,7 @@ export function reclassifyVacancies(): {
   archived: number;
   typeUpdated: number;
   fieldsCleaned: number;
+  emailsCleared: number;
   unchanged: number;
   skipped: number;
 } {
@@ -17,6 +19,7 @@ export function reclassifyVacancies(): {
   let archived = 0;
   let typeUpdated = 0;
   let fieldsCleaned = 0;
+  let emailsCleared = 0;
   let unchanged = 0;
   let skipped = 0;
 
@@ -33,7 +36,13 @@ export function reclassifyVacancies(): {
       console.log(`[Clean] ${company}: ${title}`);
     }
 
-    const result = classifyVacancy(title, vacancy.description);
+    if (vacancy.email && !isPlausibleHrEmail(vacancy.email, company)) {
+      repository.clearEmail(vacancy.id);
+      emailsCleared += 1;
+      console.log(`[Email] Cleared invalid ${vacancy.email} for ${company}`);
+    }
+
+    const result = classifyVacancy(title, vacancy.description, company);
 
     if (!result.isFit) {
       repository.markArchived(vacancy.id);
@@ -57,6 +66,7 @@ export function reclassifyVacancies(): {
     archived,
     typeUpdated,
     fieldsCleaned,
+    emailsCleared,
     unchanged,
     skipped,
   };
@@ -71,6 +81,7 @@ async function main(): Promise<void> {
     console.log(`Skipped (not new): ${summary.skipped}`);
     console.log(`Archived: ${summary.archived}`);
     console.log(`Fields cleaned: ${summary.fieldsCleaned}`);
+    console.log(`Invalid emails cleared: ${summary.emailsCleared}`);
     console.log(`Type updated: ${summary.typeUpdated}`);
     console.log(`Unchanged: ${summary.unchanged}`);
     console.log(`Active (new): ${summary.unchanged + summary.typeUpdated}`);

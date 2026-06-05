@@ -13,8 +13,9 @@ export async function processScrapedJobCard(
   snippet: string | null,
   source: string,
 ): Promise<ScrapedVacancy | null> {
-  const { description, email } = await fetchJobDetails(context, url, snippet);
-  return classifyScrapedVacancy(title, company, url, description, source, email);
+  const { title: cleanTitle, company: cleanCompany } = sanitizeJobFields(title, company);
+  const { description, email } = await fetchJobDetails(context, url, snippet, cleanCompany);
+  return classifyScrapedVacancy(cleanTitle, cleanCompany, url, description, source, email);
 }
 
 export function classifyScrapedVacancy(
@@ -26,7 +27,7 @@ export function classifyScrapedVacancy(
   email: string | null = null,
 ): ScrapedVacancy | null {
   const { title: cleanTitle, company: cleanCompany } = sanitizeJobFields(title, company);
-  const result = classifyVacancy(cleanTitle, description);
+  const result = classifyVacancy(cleanTitle, description, cleanCompany);
   recordClassification(source, result);
 
   if (!result.isFit) {

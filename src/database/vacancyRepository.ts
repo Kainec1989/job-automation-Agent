@@ -164,10 +164,38 @@ export class VacancyRepository {
         FROM vacancies
         WHERE status = 'new'
           AND (email IS NULL OR trim(email) = '')
-        ORDER BY created_at DESC
+        ORDER BY
+          CASE
+            WHEN lower(company) LIKE '%gmbh%'
+              OR lower(company) LIKE '% ag%'
+              OR lower(company) LIKE '% ag'
+              OR lower(company) LIKE '%gruppe%'
+              OR lower(company) LIKE '% ug%'
+              THEN 0
+            WHEN lower(company) LIKE '% se%'
+              OR lower(company) LIKE '% kg%'
+              THEN 1
+            ELSE 2
+          END,
+          created_at DESC
         LIMIT ?
       `)
       .all(options.limit) as Array<Pick<Vacancy, 'id' | 'title' | 'company' | 'url'>>;
+  }
+
+  clearEmail(id: number): boolean {
+    const db = getDatabase();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET email = NULL, updated_at = datetime('now')
+        WHERE id = ?
+          AND status = 'new'
+      `)
+      .run(id);
+
+    return result.changes > 0;
   }
 
   updateEmailIfNew(id: number, email: string): boolean {

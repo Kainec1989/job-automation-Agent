@@ -79,11 +79,19 @@ npm run pipeline:daily -- --skip-scrape --skip-dispatch   # enrich + sync only
 npm run pipeline:daily -- --skip-tavily                   # no Tavily API calls
 ```
 
-Cron example (06:00 daily):
+Cron (06:00 daily):
 
-```cron
-0 6 * * * cd /home/vlad/Agent && npm run pipeline:daily >> /home/vlad/Agent/logs/pipeline.log 2>&1
+```bash
+bash scripts/install-cron.sh   # installs crontab entry
 ```
+
+Manual run (same as cron):
+
+```bash
+bash scripts/run-daily-pipeline.sh
+```
+
+Logs: `logs/pipeline-YYYY-MM-DD.log` (one file per day, lock prevents overlap).
 
 ## Tavily (HR email lookup)
 

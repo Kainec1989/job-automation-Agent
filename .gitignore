@@ -9,3 +9,5 @@ test-results/
 .DS_Store
 assets/*.pdf
 Lebenslauf_tmp.html
+logs/*.log
+logs/pipeline.lock

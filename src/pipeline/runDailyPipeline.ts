@@ -4,23 +4,13 @@ import { runDispatchApplications } from '../dispatcher/runDailyApplicationPipeli
 import { enrichVacanciesWithTavily } from '../enrichment/tavily/enrichDatabase.js';
 import { reclassifyVacancies } from '../tools/reclassifyVacancies.js';
 import { scrapeAndPersist } from '../scraper/runAllScrapers.js';
+import { sendPipelineNotification } from '../notifications/pipelineNotification.js';
 import { syncDatabaseToSheets } from '../sheets/syncDatabaseToSheets.js';
+import { syncSheetsToDatabase } from '../sheets/syncSheetsToDatabase.js';
+import type { SheetsImportSummary } from '../sheets/syncSheetsToDatabase.js';
+import type { DailyPipelineOptions, DailyPipelineSummary } from './pipelineTypes.js';
 
-export interface DailyPipelineOptions {
-  skipScrape?: boolean;
-  skipReclassify?: boolean;
-  skipSheets?: boolean;
-  skipTavily?: boolean;
-  skipDispatch?: boolean;
-}
-
-export interface DailyPipelineSummary {
-  scraped: number | null;
-  reclassify: ReturnType<typeof reclassifyVacancies> | null;
-  sheetsSynced: boolean;
-  tavily: Awaited<ReturnType<typeof enrichVacanciesWithTavily>> | null;
-  dispatch: Awaited<ReturnType<typeof runDispatchApplications>> | null;
-}
+export type { DailyPipelineOptions, DailyPipelineSummary } from './pipelineTypes.js';
 
 function parseArgs(argv: string[]): DailyPipelineOptions {
   const options: DailyPipelineOptions = {};
@@ -29,11 +19,39 @@ function parseArgs(argv: string[]): DailyPipelineOptions {
     if (arg === '--skip-scrape') options.skipScrape = true;
     if (arg === '--skip-reclassify') options.skipReclassify = true;
     if (arg === '--skip-sheets') options.skipSheets = true;
+    if (arg === '--skip-sheets-import') options.skipSheetsImport = true;
     if (arg === '--skip-tavily') options.skipTavily = true;
     if (arg === '--skip-dispatch') options.skipDispatch = true;
+    if (arg === '--skip-notify') options.skipNotify = true;
   }
 
   return options;
+}
+
+async function importSheetsStep(): Promise<SheetsImportSummary | null> {
+  if (!env.googleSpreadsheetId) {
+    console.log('[Pipeline] Skipping Sheets import: GOOGLE_SPREADSHEET_ID not set.');
+    return null;
+  }
+
+  try {
+    const summary = await syncSheetsToDatabase();
+    console.log(
+      `[Pipeline] Sheets import: ${summary.emailsUpdated} emails, ` +
+        `${summary.statusesUpdated} statuses updated.`,
+    );
+    return summary;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[Pipeline] Sheets import failed: ${message}`);
+    return {
+      rowsRead: 0,
+      emailsUpdated: 0,
+      statusesUpdated: 0,
+      skipped: 0,
+      errors: 1,
+    };
+  }
 }
 
 async function syncSheetsStep(label: string): Promise<boolean> {
@@ -74,6 +92,7 @@ export async function runDailyPipeline(
 ): Promise<DailyPipelineSummary> {
   const summary: DailyPipelineSummary = {
     scraped: null,
+    sheetsImport: null,
     reclassify: null,
     sheetsSynced: false,
     tavily: null,
@@ -82,16 +101,24 @@ export async function runDailyPipeline(
 
   console.log('\n========== Daily pipeline started ==========\n');
 
+  if (!options.skipSheetsImport) {
+    console.log('--- Step 1/6: Sheets import ---');
+    summary.sheetsImport = await importSheetsStep();
+    console.log();
+  } else {
+    console.log('--- Step 1/6: Sheets import (skipped) ---\n');
+  }
+
   if (!options.skipScrape) {
-    console.log('--- Step 1/5: Scrape ---');
+    console.log('--- Step 2/6: Scrape ---');
     summary.scraped = await scrapeAndPersist();
     console.log(`[Pipeline] Scraped ${summary.scraped} vacancy/vacancies.\n`);
   } else {
-    console.log('--- Step 1/5: Scrape (skipped) ---\n');
+    console.log('--- Step 2/6: Scrape (skipped) ---\n');
   }
 
   if (!options.skipReclassify) {
-    console.log('--- Step 2/5: Reclassify ---');
+    console.log('--- Step 3/6: Reclassify ---');
     summary.reclassify = reclassifyVacancies();
     console.log(
       `[Pipeline] Reclassify: archived ${summary.reclassify.archived}, ` +
@@ -99,19 +126,19 @@ export async function runDailyPipeline(
         `fields cleaned ${summary.reclassify.fieldsCleaned}.\n`,
     );
   } else {
-    console.log('--- Step 2/5: Reclassify (skipped) ---\n');
+    console.log('--- Step 3/6: Reclassify (skipped) ---\n');
   }
 
   if (!options.skipSheets) {
-    console.log('--- Step 3/5: Sheets sync ---');
+    console.log('--- Step 4/6: Sheets sync ---');
     summary.sheetsSynced = await syncSheetsStep('after reclassify');
     console.log();
   } else {
-    console.log('--- Step 3/5: Sheets sync (skipped) ---\n');
+    console.log('--- Step 4/6: Sheets sync (skipped) ---\n');
   }
 
   if (shouldRunTavily(options.skipTavily)) {
-    console.log('--- Step 4/5: Tavily email enrichment ---');
+    console.log('--- Step 5/6: Tavily email enrichment ---');
     const tavilyConfig = getTavilyConfig();
     summary.tavily = await enrichVacanciesWithTavily({
       limit: tavilyConfig.maxLookups,
@@ -141,17 +168,23 @@ export async function runDailyPipeline(
       : !isTavilyConfigured()
         ? 'TAVILY_API_KEY not set'
         : 'TAVILY_ENABLED=false';
-    console.log(`--- Step 4/5: Tavily (skipped: ${reason}) ---\n`);
+    console.log(`--- Step 5/6: Tavily (skipped: ${reason}) ---\n`);
   }
 
   if (!options.skipDispatch) {
-    console.log('--- Step 5/5: Dispatch ---');
+    console.log('--- Step 6/6: Dispatch ---');
     summary.dispatch = await runDispatchApplications();
     console.log(
-      `[Pipeline] Dispatch: sent ${summary.dispatch.sent}, failed ${summary.dispatch.failed}.\n`,
+      `[Pipeline] Dispatch: sent ${summary.dispatch.sent}, failed ${summary.dispatch.failed}, ` +
+        `marked failed ${summary.dispatch.markedFailed}.\n`,
     );
+
+    if (!options.skipSheets && summary.dispatch.sent + summary.dispatch.markedFailed > 0) {
+      summary.sheetsSynced = (await syncSheetsStep('after dispatch')) || summary.sheetsSynced;
+      console.log();
+    }
   } else {
-    console.log('--- Step 5/5: Dispatch (skipped) ---\n');
+    console.log('--- Step 6/6: Dispatch (skipped) ---\n');
   }
 
   console.log('========== Daily pipeline finished ==========');
@@ -165,6 +198,11 @@ async function main(): Promise<void> {
     const summary = await runDailyPipeline(options);
 
     console.log('\n=== Pipeline summary ===');
+    if (summary.sheetsImport) {
+      console.log(
+        `Sheets import: ${summary.sheetsImport.emailsUpdated} emails, ${summary.sheetsImport.statusesUpdated} statuses`,
+      );
+    }
     if (summary.scraped !== null) {
       console.log(`Scraped: ${summary.scraped}`);
     }
@@ -178,7 +216,13 @@ async function main(): Promise<void> {
       console.log(`Tavily emails saved: ${summary.tavily.saved}`);
     }
     if (summary.dispatch) {
-      console.log(`Applications sent: ${summary.dispatch.sent}`);
+      console.log(
+        `Applications sent: ${summary.dispatch.sent}, marked failed: ${summary.dispatch.markedFailed}`,
+      );
+    }
+
+    if (!options.skipNotify) {
+      await sendPipelineNotification(summary);
     }
 
     if (summary.dispatch && summary.dispatch.failed > 0) {

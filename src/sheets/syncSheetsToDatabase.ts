@@ -13,6 +13,7 @@ const VALID_STATUSES = new Set<VacancyStatus>([
   'replied',
   'rejected',
   'archived',
+  'failed',
 ]);
 
 export interface SheetsImportSummary {
@@ -116,6 +117,9 @@ export async function syncSheetsToDatabase(): Promise<SheetsImportSummary> {
         if (!status) {
           console.warn(`[Sheets Import] Invalid status "${statusRaw}" for id=${id}, skipped.`);
         } else if (repository.canImportStatusFromSheets(vacancy.status, status)) {
+          if (vacancy.status === 'failed' && status === 'new') {
+            repository.resetDispatchState(id);
+          }
           repository.updateStatus(id, status);
           summary.statusesUpdated += 1;
           console.log(`[Sheets Import] Status updated: id=${id} ${vacancy.status} → ${status}`);

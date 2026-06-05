@@ -14,10 +14,13 @@ export const VACANCIES_TABLE_SQL = `
     type        TEXT    NOT NULL DEFAULT 'junior'
                         CHECK (type IN ('junior', 'praktikum')),
     status      TEXT    NOT NULL DEFAULT 'new'
-                        CHECK (status IN ('new', 'contacted', 'replied', 'rejected', 'archived')),
+                        CHECK (status IN ('new', 'contacted', 'replied', 'rejected', 'archived', 'failed')),
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-    sent_at     TEXT
+    sent_at     TEXT,
+    dispatch_retry_count INTEGER NOT NULL DEFAULT 0,
+    last_dispatch_at TEXT,
+    dispatch_error TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_vacancies_status ON vacancies(status);
@@ -91,6 +94,57 @@ const MIGRATIONS: Migration[] = [
       }
 
       return false;
+    },
+  },
+  {
+    id: '004_dispatch_tracking',
+    run(db) {
+      const columns = db.pragma('table_info(vacancies)') as Array<{ name: string }>;
+      const hasRetryCount = columns.some((column) => column.name === 'dispatch_retry_count');
+
+      if (hasRetryCount) {
+        return false;
+      }
+
+      console.log(`Running migration ${this.id}...`);
+      db.exec(`
+        CREATE TABLE vacancies_new (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          title       TEXT    NOT NULL,
+          company     TEXT    NOT NULL,
+          url         TEXT    NOT NULL UNIQUE,
+          email       TEXT,
+          description TEXT,
+          type        TEXT    NOT NULL DEFAULT 'junior'
+                          CHECK (type IN ('junior', 'praktikum')),
+          status      TEXT    NOT NULL DEFAULT 'new'
+                          CHECK (status IN ('new', 'contacted', 'replied', 'rejected', 'archived', 'failed')),
+          created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+          sent_at     TEXT,
+          dispatch_retry_count INTEGER NOT NULL DEFAULT 0,
+          last_dispatch_at TEXT,
+          dispatch_error TEXT
+        );
+
+        INSERT INTO vacancies_new (
+          id, title, company, url, email, description, type, status,
+          created_at, updated_at, sent_at, dispatch_retry_count, last_dispatch_at, dispatch_error
+        )
+        SELECT
+          id, title, company, url, email, description, type, status,
+          created_at, updated_at, sent_at, 0, NULL, NULL
+        FROM vacancies;
+
+        DROP TABLE vacancies;
+        ALTER TABLE vacancies_new RENAME TO vacancies;
+
+        CREATE INDEX IF NOT EXISTS idx_vacancies_status ON vacancies(status);
+        CREATE INDEX IF NOT EXISTS idx_vacancies_company ON vacancies(company);
+        CREATE INDEX IF NOT EXISTS idx_vacancies_type ON vacancies(type);
+      `);
+      console.log(`Migration ${this.id} completed successfully.`);
+      return true;
     },
   },
 ];

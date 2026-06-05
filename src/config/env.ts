@@ -146,6 +146,12 @@ export const env = {
   ),
   applicantName: optionalEnv('APPLICANT_NAME', 'Ihr Name'),
   dispatchLimit: Number(optionalEnv('DISPATCH_LIMIT', '10')),
+  dispatchMaxRetries: Number(optionalEnv('DISPATCH_MAX_RETRIES', '3')),
+  pipelineNotifyEnabled: optionalEnv('PIPELINE_NOTIFY_ENABLED', 'false') === 'true',
+  pipelineNotifyEmail: optionalEnv('PIPELINE_NOTIFY_EMAIL', 'true') !== 'false',
+  notifyEmailTo: optionalEnv('NOTIFY_EMAIL_TO', ''),
+  telegramBotToken: optionalEnv('TELEGRAM_BOT_TOKEN', ''),
+  telegramChatId: optionalEnv('TELEGRAM_CHAT_ID', ''),
   chromePath,
   searchDelayMs: Number(optionalEnv('SEARCH_DELAY_MS', '20000')),
 

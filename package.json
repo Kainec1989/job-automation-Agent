@@ -18,7 +18,9 @@
     "auth:linkedin": "tsx src/scraper/saveBrowserAuth.ts linkedin",
     "auth:status": "tsx src/scraper/authStatus.ts",
     "tavily:lookup": "tsx src/tools/tavilyLookup.ts",
-    "tavily:enrich": "tsx src/tools/tavilyLookup.ts"
+    "tavily:enrich": "tsx src/tools/tavilyLookup.ts",
+    "telegram:setup": "tsx src/tools/telegramSetup.ts",
+    "notify:test": "tsx src/tools/testPipelineNotification.ts"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -1,4 +1,4 @@
-export type VacancyStatus = 'new' | 'contacted' | 'replied' | 'rejected' | 'archived';
+export type VacancyStatus = 'new' | 'contacted' | 'replied' | 'rejected' | 'archived' | 'failed';
 export type VacancyType = 'junior' | 'praktikum';
 
 export interface Vacancy {
@@ -11,6 +11,9 @@ export interface Vacancy {
   type: VacancyType;
   status: VacancyStatus;
   sentAt: string | null;
+  dispatchRetryCount: number;
+  lastDispatchAt: string | null;
+  dispatchError: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -41,4 +44,5 @@ export interface PendingVacancy {
   type: VacancyType;
   email: string;
   description: string | null;
+  dispatchRetryCount: number;
 }

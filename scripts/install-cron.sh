@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT="/home/vlad/Agent/scripts/run-daily-pipeline.sh"
-CRON_LINE="0 6 * * * ${SCRIPT}"
+CRON_LINE="0 12 * * * ${SCRIPT}"
 
 chmod +x "$SCRIPT"
 

@@ -33,7 +33,7 @@ cp .env.example .env
 
 npm run db:init
 npm run send:test        # test SMTP + PDF attachments
-npm run pipeline:daily   # scrape → reclassify → sheets → tavily → dispatch
+npm run pipeline:daily   # import → scrape → reclassify → sheets → tavily → dispatch
 # Or step by step:
 npm run scrape
 npm run tavily:enrich -- --limit 5
@@ -66,20 +66,44 @@ npm run pipeline:daily
 
 Steps (in order):
 
-1. **Scrape** — job boards → classify → SQLite
-2. **Reclassify** — archive misfits, clean titles
-3. **Sheets sync** — export DB (if `GOOGLE_SPREADSHEET_ID` set)
-4. **Tavily enrich** — find HR emails (if `TAVILY_ENABLED=true` + API key)
-5. **Dispatch** — send applications (`DISPATCH_LIMIT` per run)
+1. **Sheets import** — pull manual emails/status from Google Sheets
+2. **Scrape** — job boards → classify → SQLite
+3. **Reclassify** — archive misfits, clean titles
+4. **Sheets sync** — export DB (if `GOOGLE_SPREADSHEET_ID` set)
+5. **Tavily enrich** — find HR emails (if `TAVILY_ENABLED=true` + API key)
+6. **Dispatch** — send applications (`DISPATCH_LIMIT` per run); retries next day, `failed` after `DISPATCH_MAX_RETRIES`
 
 Skip individual steps:
 
 ```bash
 npm run pipeline:daily -- --skip-scrape --skip-dispatch   # enrich + sync only
 npm run pipeline:daily -- --skip-tavily                   # no Tavily API calls
+npm run pipeline:daily -- --skip-sheets-import            # skip pulling from Sheets
 ```
 
-Cron (06:00 daily):
+### Notifications
+
+After each pipeline run, optional summary via email and/or Telegram:
+
+```env
+PIPELINE_NOTIFY_ENABLED=true
+PIPELINE_NOTIFY_EMAIL=true
+NOTIFY_EMAIL_TO=plugin.vg.co@gmail.com   # defaults to SMTP_USER
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+```
+
+Setup Telegram (one-time):
+
+```bash
+# 1. Telegram → @BotFather → /newbot → copy token to .env
+# 2. Send /start to your bot
+npm run telegram:setup    # prints your chat_id
+# 3. Add TELEGRAM_CHAT_ID=... to .env
+npm run notify:test       # sends a test message
+```
+
+Cron (12:00 daily):
 
 ```bash
 bash scripts/install-cron.sh   # installs crontab entry

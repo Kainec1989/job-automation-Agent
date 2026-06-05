@@ -8,6 +8,12 @@ import { getTavilyEmailCache, setTavilyEmailCache } from './emailCache.js';
 import { lookupHrEmail } from './emailLookup.js';
 import type { TavilyEmailLookupResult } from './types.js';
 
+export interface TavilySavedEmail {
+  company: string;
+  title: string;
+  email: string;
+}
+
 export interface TavilyEnrichmentSummary {
   processed: number;
   saved: number;
@@ -15,6 +21,7 @@ export interface TavilyEnrichmentSummary {
   failed: number;
   skipped: number;
   cacheHits: number;
+  savedEmails: TavilySavedEmail[];
 }
 
 export interface TavilyEnrichmentOptions {
@@ -41,6 +48,7 @@ export async function enrichVacanciesWithTavily(
     failed: 0,
     skipped: 0,
     cacheHits: 0,
+    savedEmails: [],
   };
 
   if (vacancies.length === 0) {
@@ -93,6 +101,11 @@ export async function enrichVacanciesWithTavily(
         saved = repository.updateEmailIfNew(vacancy.id, email);
         if (saved) {
           summary.saved += 1;
+          summary.savedEmails.push({
+            company: vacancy.company,
+            title: vacancy.title,
+            email,
+          });
         }
       } else {
         summary.notFound += 1;

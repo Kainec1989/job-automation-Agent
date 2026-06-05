@@ -17,6 +17,9 @@ interface VacancyRow {
   type: VacancyType;
   status: VacancyStatus;
   sent_at: string | null;
+  dispatch_retry_count: number;
+  last_dispatch_at: string | null;
+  dispatch_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +35,9 @@ function mapRow(row: VacancyRow): Vacancy {
     type: row.type,
     status: row.status,
     sentAt: row.sent_at,
+    dispatchRetryCount: row.dispatch_retry_count ?? 0,
+    lastDispatchAt: row.last_dispatch_at,
+    dispatchError: row.dispatch_error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -85,7 +91,7 @@ export class VacancyRepository {
         description = COALESCE(excluded.description, vacancies.description),
         type = excluded.type,
         status = CASE
-          WHEN vacancies.status IN ('contacted', 'replied', 'rejected', 'archived')
+          WHEN vacancies.status IN ('contacted', 'replied', 'rejected', 'archived', 'failed')
           THEN vacancies.status
           ELSE excluded.status
         END,
@@ -214,20 +220,53 @@ export class VacancyRepository {
     return result.changes > 0;
   }
 
-  findPendingWithEmail(limit: number): PendingVacancy[] {
+  findPendingWithEmail(limit: number, maxRetries: number): PendingVacancy[] {
     const db = getDatabase();
 
     return db
       .prepare(`
-        SELECT id, title, company, type, email, description
+        SELECT id, title, company, type, email, description, dispatch_retry_count
         FROM vacancies
         WHERE status = 'new'
           AND email IS NOT NULL
           AND trim(email) != ''
+          AND dispatch_retry_count < ?
+          AND (
+            last_dispatch_at IS NULL
+            OR date(last_dispatch_at) < date('now')
+          )
         ORDER BY created_at ASC
         LIMIT ?
       `)
-      .all(limit) as PendingVacancy[];
+      .all(maxRetries, limit) as PendingVacancy[];
+  }
+
+  recordDispatchFailure(id: number, error: string, maxRetries: number): 'retry' | 'failed' {
+    const db = getDatabase();
+    const trimmedError = error.slice(0, 500);
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET dispatch_retry_count = dispatch_retry_count + 1,
+            last_dispatch_at = datetime('now'),
+            dispatch_error = ?,
+            status = CASE
+              WHEN dispatch_retry_count + 1 >= ? THEN 'failed'
+              ELSE status
+            END,
+            updated_at = datetime('now')
+        WHERE id = ?
+          AND status = 'new'
+      `)
+      .run(trimmedError, maxRetries, id);
+
+    if (result.changes === 0) {
+      throw new Error(`Cannot record dispatch failure: id=${id}`);
+    }
+
+    const vacancy = this.findById(id);
+    return vacancy?.status === 'failed' ? 'failed' : 'retry';
   }
 
   markContacted(id: number): void {
@@ -320,6 +359,19 @@ export class VacancyRepository {
     if (result.changes === 0) {
       throw new Error(`Vacancy not found: id=${id}`);
     }
+  }
+
+  resetDispatchState(id: number): void {
+    const db = getDatabase();
+
+    db.prepare(`
+      UPDATE vacancies
+      SET dispatch_retry_count = 0,
+          last_dispatch_at = NULL,
+          dispatch_error = NULL,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(id);
   }
 
   updateStatus(id: number, status: VacancyStatus): void {

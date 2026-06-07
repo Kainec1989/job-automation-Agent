@@ -147,6 +147,70 @@ const MIGRATIONS: Migration[] = [
       return true;
     },
   },
+  {
+    id: '005_dispatch_events',
+    run(db) {
+      const table = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dispatch_events'")
+        .get() as { name: string } | undefined;
+
+      if (table) {
+        return false;
+      }
+
+      console.log(`Running migration ${this.id}...`);
+      db.exec(`
+        CREATE TABLE dispatch_events (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          vacancy_id  INTEGER NOT NULL,
+          company     TEXT,
+          email       TEXT,
+          outcome     TEXT    NOT NULL,
+          error       TEXT,
+          created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dispatch_events_vacancy ON dispatch_events(vacancy_id);
+        CREATE INDEX IF NOT EXISTS idx_dispatch_events_created ON dispatch_events(created_at);
+      `);
+      console.log(`Migration ${this.id} completed successfully.`);
+      return true;
+    },
+  },
+  {
+    id: '006_performance_indexes',
+    run(db) {
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_vacancies_created ON vacancies(created_at);
+        CREATE INDEX IF NOT EXISTS idx_vacancies_email ON vacancies(email);
+      `);
+      return false;
+    },
+  },
+  {
+    id: '007_cover_letter_cache',
+    run(db) {
+      const table = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cover_letter_cache'")
+        .get() as { name: string } | undefined;
+
+      if (table) {
+        return false;
+      }
+
+      console.log(`Running migration ${this.id}...`);
+      db.exec(`
+        CREATE TABLE cover_letter_cache (
+          cache_key    TEXT PRIMARY KEY,
+          subject      TEXT NOT NULL,
+          body         TEXT NOT NULL,
+          created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      console.log(`Migration ${this.id} completed successfully.`);
+      return true;
+    },
+  },
 ];
 
 let db: Database.Database | null = null;

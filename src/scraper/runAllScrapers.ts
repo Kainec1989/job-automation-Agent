@@ -1,12 +1,14 @@
 import { closeDatabase } from '../database/db.js';
 import { env } from '../config/env.js';
 import { printScraperAuthWarnings } from './authStatus.js';
-import { launchBrowser, sleep } from './browser.js';
+import { consumeSoftBlockAlerts, launchBrowser, sleep } from './browser.js';
+import { isTelegramConfigured, sendTelegramMessage } from '../notifications/telegram.js';
 import { indeedScraper } from './indeedScraper.js';
 import { stepstoneScraper } from './stepstoneScraper.js';
 import { linkedinScraper } from './linkedinScraper.js';
+import { arbeitsagenturScraper } from './arbeitsagenturScraper.js';
 import { printClassificationStats, resetClassificationStats } from './classificationStats.js';
-import { mergeVacancies } from './mergeVacancies.js';
+import { dedupeByCompanyTitle, mergeVacancies } from './mergeVacancies.js';
 import { persistVacancies } from './persistVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
 import type { ScrapedVacancy } from '../database/types.js';
@@ -15,6 +17,7 @@ const SCRAPER_REGISTRY: Record<string, JobBoardScraper> = {
   indeed: indeedScraper,
   stepstone: stepstoneScraper,
   linkedin: linkedinScraper,
+  arbeitsagentur: arbeitsagenturScraper,
 };
 
 function getEnabledScrapers(): JobBoardScraper[] {
@@ -62,6 +65,29 @@ export async function runAllScrapers(): Promise<ScrapedVacancy[]> {
   return [...merged.values()];
 }
 
+async function reportSoftBlocks(): Promise<void> {
+  const alerts = consumeSoftBlockAlerts();
+  if (alerts.length === 0) {
+    return;
+  }
+
+  const lines = alerts.map((alert) => `• ${alert.host}: ${alert.reason}`);
+  console.warn(`[Scraper] Soft blocks detected:\n${lines.join('\n')}`);
+
+  if (!isTelegramConfigured()) {
+    return;
+  }
+
+  try {
+    await sendTelegramMessage(
+      ['⚠️ Скрапер заблокирован / сессия истекла:', '', ...lines].join('\n'),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[Scraper] Could not send soft-block alert: ${message}`);
+  }
+}
+
 function logScraperSettings(): void {
   console.log(`Enabled scrapers: ${env.enabledScrapers.join(', ')}`);
   console.log(`Junior keywords: ${env.keywordsJunior.join(', ')}`);
@@ -81,8 +107,15 @@ export async function scrapeAndPersist(): Promise<number> {
   printScraperAuthWarnings();
   resetClassificationStats();
 
-  const vacancies = await runAllScrapers();
+  const rawVacancies = await runAllScrapers();
   printClassificationStats();
+  await reportSoftBlocks();
+
+  const vacancies = dedupeByCompanyTitle(rawVacancies);
+  const duplicates = rawVacancies.length - vacancies.length;
+  if (duplicates > 0) {
+    console.log(`Cross-board dedup: removed ${duplicates} duplicate posting(s).`);
+  }
 
   for (const vacancy of vacancies) {
     console.log(`- [${vacancy.type}] [${vacancy.company}] ${vacancy.title} → ${vacancy.url}`);

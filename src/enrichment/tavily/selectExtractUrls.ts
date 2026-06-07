@@ -10,14 +10,21 @@ function isAggregatorHost(host: string): boolean {
 
 export function urlMatchesCompany(url: string, company: string): boolean {
   try {
-    const host = new URL(url).hostname.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostBase = (hostname.split('.')[0] ?? '').replace(/[^a-z0-9]/g, '');
     const slug = companySlug(company);
-    if (slug.length < 6) {
+
+    if (slug.length < 3 || hostBase.length < 3) {
       return false;
     }
 
+    // Short company names need a stricter match to avoid coincidental substring hits.
+    if (slug.length <= 5) {
+      return hostBase === slug || hostBase.startsWith(slug) || slug.startsWith(hostBase);
+    }
+
     const slugPrefix = slug.slice(0, Math.min(slug.length, 12));
-    return host.includes(slugPrefix) || slug.includes(host.replace(/^www/, ''));
+    return hostBase.includes(slugPrefix) || slug.includes(hostBase);
   } catch {
     return false;
   }

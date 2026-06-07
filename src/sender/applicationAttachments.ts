@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 
 export function buildApplicationAttachments(
   anschreibenPdf: Buffer,
-  resumePath: string = env.testAttachmentPath,
+  resumePath: string = env.resumePath,
 ): EmailAttachment[] {
   const attachments: EmailAttachment[] = [
     {

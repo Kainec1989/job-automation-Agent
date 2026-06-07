@@ -6,12 +6,16 @@ Node.js/TypeScript pipeline for automated job search and applications on the Ger
 
 ## Features
 
-- **Scraping** — Indeed, Stepstone, LinkedIn via Playwright (system Chrome)
+- **Scraping** — Indeed, Stepstone, LinkedIn via Playwright (system Chrome) + Arbeitsagentur (captcha-free JSON API)
+- **Resilient scraping** — soft-block/captcha detection with Telegram alerts, navigation retries, stale-session warnings
 - **Full job descriptions** — fetches detail pages, not only listing snippets
 - **IT classifier** — filters by tech stack, seniority, and non-IT roles
-- **SQLite storage** — deduplicated vacancies with status tracking
+- **SQLite storage** — deduplicated vacancies (incl. cross-board dedup) with status tracking
 - **Google Sheets sync** — export to Sheets, import HR emails back to DB
-- **Email dispatch** — tailored German cover letter (PDF), CV, DCI certificate
+- **HR email lookup** — Tavily search/extract with caching (re-tries stale negatives) and API retries
+- **Email dispatch** — tailored German cover letter (DIN 5008 PDF), CV, DCI certificate
+- **LLM cover letters** — optional per-vacancy Anschreiben generation with template fallback
+- **Safety controls** — Telegram approval before sending, do-not-contact list, per-domain daily caps, dispatch history, DB backups
 - **Stats** — rejection reasons per scrape run
 
 ## Tech Stack
@@ -103,6 +107,27 @@ npm run telegram:setup    # prints your chat_id
 # 3. Add TELEGRAM_CHAT_ID=... to .env
 npm run notify:test       # sends a test message
 ```
+
+### Safety controls & LLM cover letters
+
+Optional guards around sending (see [`.env.example`](.env.example)):
+
+```env
+DISPATCH_REQUIRE_APPROVAL=false   # ask via Telegram ("да"/"нет") before sending a batch
+DISPATCH_APPROVAL_TIMEOUT_MS=600000
+DISPATCH_MAX_PER_DOMAIN_PER_DAY=1 # cap applications to one email domain per day (0 = off)
+DO_NOT_CONTACT=                   # comma-separated company substrings, domains, or addresses
+RESUME_PATH=./assets/Lebenslauf.pdf
+
+# Optional LLM-generated Anschreiben (falls back to the template when off/unavailable)
+LLM_ENABLED=false
+LLM_PROVIDER=openai               # openai | anthropic
+LLM_API_KEY=
+LLM_MODEL=gpt-4o-mini
+```
+
+Every send attempt (sent / failed / skipped) is recorded in the `dispatch_events` table, and
+`scripts/run-daily-pipeline.sh` backs up the SQLite DB to `data/backups/` (keeps the newest 14).
 
 Cron (12:00 daily):
 

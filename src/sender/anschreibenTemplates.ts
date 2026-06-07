@@ -13,6 +13,62 @@ interface TemplateContext {
   description: string | null;
   applicantName: string;
   type: VacancyType;
+  contactName?: string | null;
+}
+
+const GENERIC_LOCAL_PARTS = new Set([
+  'info',
+  'kontakt',
+  'contact',
+  'bewerbung',
+  'bewerbungen',
+  'jobs',
+  'job',
+  'karriere',
+  'career',
+  'hr',
+  'recruiting',
+  'personal',
+  'office',
+  'mail',
+  'service',
+  'team',
+  'hello',
+  'hallo',
+  'noreply',
+  'no-reply',
+]);
+
+/**
+ * Derives a likely contact person from a "vorname.nachname@" style address.
+ * Returns null for generic mailboxes (info@, bewerbung@, ...) or non-name local parts.
+ */
+export function deriveContactNameFromEmail(email: string): string | null {
+  const local = email.trim().toLowerCase().split('@')[0] ?? '';
+  if (!local || GENERIC_LOCAL_PARTS.has(local)) {
+    return null;
+  }
+
+  const parts = local.split('.').filter(Boolean);
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  if (parts.some((part) => part.length < 2 || !/^[a-zäöüß-]+$/.test(part))) {
+    return null;
+  }
+
+  return parts
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildSalutation(contactName?: string | null): string {
+  if (contactName && contactName.trim()) {
+    return `Guten Tag ${contactName.trim()},`;
+  }
+
+  return 'Sehr geehrte Damen und Herren,';
 }
 
 interface SkillRule {
@@ -140,10 +196,10 @@ function buildEducationParagraph(ctx: TemplateContext): string {
     : '';
 
   if (ctx.type === 'praktikum') {
-    return `Im Mai 2025 habe ich die Weiterbildung zum Fullstack Web Developer am Digital Career Institute (DCI) abgeschlossen.${certificateNote} Die folgenden Skills setze ich gezielt in Ihrem Umfeld ein:\n\n${bullets}`;
+    return `Im ${env.dciGraduation} habe ich die Weiterbildung zum Fullstack Web Developer am Digital Career Institute (DCI) abgeschlossen.${certificateNote} Die folgenden Skills setze ich gezielt in Ihrem Umfeld ein:\n\n${bullets}`;
   }
 
-  return `Die Weiterbildung zum Fullstack Web Developer am Digital Career Institute (DCI) habe ich im Mai 2025 abgeschlossen.${certificateNote} Für Ihre Anforderungen bringe ich folgende Schwerpunkte mit:\n\n${bullets}`;
+  return `Die Weiterbildung zum Fullstack Web Developer am Digital Career Institute (DCI) habe ich im ${env.dciGraduation} abgeschlossen.${certificateNote} Für Ihre Anforderungen bringe ich folgende Schwerpunkte mit:\n\n${bullets}`;
 }
 
 function buildAiParagraph(): string {
@@ -170,7 +226,7 @@ function renderTemplate(ctx: TemplateContext): AnschreibenContent {
       : roleLabel;
 
   const paragraphs = [
-    'Sehr geehrte Damen und Herren,',
+    buildSalutation(ctx.contactName),
     '',
     buildIntro(ctx),
     '',
@@ -205,15 +261,16 @@ function getEmailAttachmentList(): string {
 
 function buildEmailHook(ctx: TemplateContext): string {
   if (ctx.type === 'praktikum') {
-    return `die ausgeschriebene Position „${ctx.title}" bei ${ctx.company} entspricht genau dem, was ich suche: praktische Erfahrung in der Softwareentwicklung nach meiner DCI-Weiterbildung (Mai 2025).`;
+    return `die ausgeschriebene Position „${ctx.title}" bei ${ctx.company} entspricht genau dem, was ich suche: praktische Erfahrung in der Softwareentwicklung nach meiner DCI-Weiterbildung (${env.dciGraduation}).`;
   }
 
-  return `die Position „${ctx.title}" bei ${ctx.company} passt zu meinem Profil als Fullstack Web Developer. Ich bringe Node.js/TypeScript-Erfahrung aus Projekten und der DCI-Weiterbildung (Mai 2025) mit.`;
+  return `die Position „${ctx.title}" bei ${ctx.company} passt zu meinem Profil als Fullstack Web Developer. Ich bringe Node.js/TypeScript-Erfahrung aus Projekten und der DCI-Weiterbildung (${env.dciGraduation}) mit.`;
 }
 
 /** Kurzer E-Mail-Text im Posteingang — Anschreiben im PDF-Anhang bleibt ausführlicher */
 export function buildEmailBody(
   vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+  contactName?: string | null,
 ): string {
   const normalized = normalizeVacancyFields(vacancy);
   const templateType = selectTemplateType(normalized.type);
@@ -223,6 +280,7 @@ export function buildEmailBody(
     description: normalized.description ?? null,
     applicantName: env.applicantName,
     type: templateType,
+    contactName,
   };
 
   const skillLines = pickSkillBullets(ctx.title, ctx.description, 3)
@@ -230,7 +288,7 @@ export function buildEmailBody(
     .join('\n');
 
   const paragraphs = [
-    'Sehr geehrte Damen und Herren,',
+    buildSalutation(ctx.contactName),
     '',
     buildEmailHook(ctx),
     '',
@@ -252,6 +310,7 @@ export function buildEmailBody(
 
 export function buildAnschreiben(
   vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+  contactName?: string | null,
 ): AnschreibenContent {
   const normalized = normalizeVacancyFields(vacancy);
   const templateType = selectTemplateType(normalized.type);
@@ -262,6 +321,7 @@ export function buildAnschreiben(
     description: normalized.description ?? null,
     applicantName: env.applicantName,
     type: templateType,
+    contactName,
   });
 }
 

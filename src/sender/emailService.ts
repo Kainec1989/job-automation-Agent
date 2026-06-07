@@ -4,8 +4,14 @@ import type { Attachment } from 'nodemailer/lib/mailer/index.js';
 import { env, getSmtpConfig } from '../config/env.js';
 import type { Vacancy, VacancyType } from '../database/types.js';
 import { buildApplicationAttachments } from './applicationAttachments.js';
-import { buildAnschreiben, buildEmailBody, selectTemplateType } from './anschreibenTemplates.js';
+import {
+  buildAnschreiben,
+  buildEmailBody,
+  deriveContactNameFromEmail,
+  selectTemplateType,
+} from './anschreibenTemplates.js';
 import { createAnschreibenPdf } from './createAnschreibenPdf.js';
+import { generateAnschreiben } from './coverLetterGenerator.js';
 
 export interface EmailAttachment {
   filename: string;
@@ -95,36 +101,71 @@ export class EmailService {
 
   buildApplicationEmail(
     vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+    contactName?: string | null,
   ): { subject: string; text: string } {
     const templateType = selectTemplateType(vacancy.type);
-    return buildAnschreiben({ ...vacancy, type: templateType });
+    return buildAnschreiben({ ...vacancy, type: templateType }, contactName);
   }
 
   buildShortEmailBody(
     vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+    contactName?: string | null,
   ): string {
-    return buildEmailBody(vacancy);
+    return buildEmailBody(vacancy, contactName);
+  }
+
+  /** Anschreiben text + subject via LLM (if configured), falling back to the template. */
+  private async buildAnschreibenContent(
+    vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
+    contactName?: string | null,
+  ): Promise<{ subject: string; text: string }> {
+    const llm = await generateAnschreiben({
+      title: vacancy.title,
+      company: vacancy.company,
+      type: vacancy.type,
+      description: vacancy.description ?? null,
+      applicantName: env.applicantName,
+      contactName,
+    });
+
+    if (llm) {
+      console.log(`Using LLM-generated Anschreiben for ${vacancy.company}.`);
+      return { subject: llm.subject, text: llm.body };
+    }
+
+    return this.buildApplicationEmail(vacancy, contactName);
   }
 
   async sendApplicationEmail(
     vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
     to: string,
-    resumePath: string = env.testAttachmentPath,
+    resumePath: string = env.resumePath,
   ): Promise<void> {
     if (!to.trim()) {
       throw new Error('Recipient email address is required');
     }
 
-    const { subject, text: anschreibenText } = this.buildApplicationEmail(vacancy);
+    const contactName = deriveContactNameFromEmail(to);
+    const { subject, text: anschreibenText } = await this.buildAnschreibenContent(
+      vacancy,
+      contactName,
+    );
 
     console.log(`Generating Anschreiben PDF for ${vacancy.company} (${vacancy.type})...`);
-    const pdfBuffer = await createAnschreibenPdf(anschreibenText);
+    const pdfBuffer = await createAnschreibenPdf({
+      body: anschreibenText,
+      subject,
+      senderName: env.applicantName,
+      senderContactLines: [env.applicantEmail, env.applicantPhone].filter(Boolean),
+      recipientCompany: vacancy.company,
+      location: env.applicantLocation || undefined,
+    });
 
     console.log(`Sending application email to ${to}...`);
     await this.sendEmail({
       to,
       subject,
-      text: this.buildShortEmailBody(vacancy),
+      text: this.buildShortEmailBody(vacancy, contactName),
       attachments: buildApplicationAttachments(pdfBuffer, resumePath),
     });
 
@@ -146,10 +187,17 @@ export class EmailService {
         'Wir suchen einen Junior Developer mit Node.js, TypeScript, React, Python, LLM und Testautomatisierung mit Playwright.',
     };
 
-    const { subject, text: anschreibenText } = this.buildApplicationEmail(testVacancy);
+    const { subject, text: anschreibenText } = await this.buildAnschreibenContent(testVacancy);
 
     console.log(`Generating test Anschreiben PDF (${testVacancy.type})...`);
-    const pdfBuffer = await createAnschreibenPdf(anschreibenText);
+    const pdfBuffer = await createAnschreibenPdf({
+      body: anschreibenText,
+      subject,
+      senderName: env.applicantName,
+      senderContactLines: [env.applicantEmail, env.applicantPhone].filter(Boolean),
+      recipientCompany: testVacancy.company,
+      location: env.applicantLocation || undefined,
+    });
 
     const attachments = buildApplicationAttachments(pdfBuffer, env.testAttachmentPath);
     console.log(

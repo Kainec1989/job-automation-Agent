@@ -28,13 +28,45 @@ function mapRow(row: TavilyEmailCacheRow): TavilyEmailCacheEntry {
   };
 }
 
-export function getTavilyEmailCache(company: string): TavilyEmailCacheEntry | null {
+export interface TavilyCacheOptions {
+  /** Negative (no-email) cache entries older than this are treated as a miss so they get retried. */
+  negativeTtlDays?: number;
+}
+
+function isNegativeEntryStale(lookedUpAt: string, ttlDays: number): boolean {
+  const lookedUpMs = Date.parse(`${lookedUpAt.replace(' ', 'T')}Z`);
+  if (Number.isNaN(lookedUpMs)) {
+    return false;
+  }
+
+  const ageMs = Date.now() - lookedUpMs;
+  return ageMs > ttlDays * 24 * 60 * 60 * 1000;
+}
+
+export function getTavilyEmailCache(
+  company: string,
+  options?: TavilyCacheOptions,
+): TavilyEmailCacheEntry | null {
   const db = getDatabase();
   const row = db
     .prepare('SELECT * FROM tavily_email_cache WHERE company_key = ?')
     .get(companyCacheKey(company)) as TavilyEmailCacheRow | undefined;
 
-  return row ? mapRow(row) : null;
+  if (!row) {
+    return null;
+  }
+
+  // Re-attempt companies whose negative result has expired (e.g. rebrand, new impressum page).
+  if (
+    row.email === null &&
+    options?.negativeTtlDays !== undefined &&
+    options.negativeTtlDays > 0 &&
+    isNegativeEntryStale(row.looked_up_at, options.negativeTtlDays)
+  ) {
+    return null;
+  }
+
+  return mapRow(row);
 }
 
 export function setTavilyEmailCache(

@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { scrapePaginatedSearch, sleep, getContextOptions } from './browser.js';
+import { scrapePaginatedSearch, sleep, getContextOptions, recordSoftBlock } from './browser.js';
 import { buildLinkedInPageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
@@ -143,6 +143,13 @@ async function scrapeAllLinkedInSearches(browser: Browser): Promise<ScrapedVacan
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[LinkedIn] Skipping search after error: ${message}`);
     }
+  }
+
+  if (merged.size === 0 && env.linkedinStorageState) {
+    console.warn(
+      '[LinkedIn] No vacancies with a saved session — the LinkedIn session may be expired. Re-run: npm run auth:linkedin',
+    );
+    recordSoftBlock('linkedin.com', 'no results with saved session (possibly expired)');
   }
 
   return [...merged.values()];

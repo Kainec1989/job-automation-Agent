@@ -1,5 +1,6 @@
 import type {
   CreateVacancyInput,
+  DispatchEventInput,
   PendingVacancy,
   Vacancy,
   VacancyStatus,
@@ -295,6 +296,52 @@ export class VacancyRepository {
 
     const vacancy = this.findById(id);
     return vacancy?.status === 'failed' ? 'failed' : 'retry';
+  }
+
+  recordDispatchEvent(input: DispatchEventInput): void {
+    const db = getDatabase();
+
+    db.prepare(`
+      INSERT INTO dispatch_events (vacancy_id, company, email, outcome, error)
+      VALUES (@vacancyId, @company, @email, @outcome, @error)
+    `).run({
+      vacancyId: input.vacancyId,
+      company: input.company,
+      email: input.email ?? null,
+      outcome: input.outcome,
+      error: input.error ? input.error.slice(0, 500) : null,
+    });
+  }
+
+  /** Number of successfully sent applications since the start of the current day. */
+  countSentToday(): number {
+    const db = getDatabase();
+    const row = db
+      .prepare(`
+        SELECT count(*) AS c
+        FROM dispatch_events
+        WHERE outcome = 'sent'
+          AND date(created_at) = date('now')
+      `)
+      .get() as { c: number };
+
+    return row.c;
+  }
+
+  /** Number of successfully sent applications to a given email domain since the start of the current day. */
+  countSentToDomainToday(domain: string): number {
+    const db = getDatabase();
+    const row = db
+      .prepare(`
+        SELECT count(*) AS c
+        FROM dispatch_events
+        WHERE outcome = 'sent'
+          AND date(created_at) = date('now')
+          AND lower(email) LIKE '%@' || lower(?)
+      `)
+      .get(domain.toLowerCase()) as { c: number };
+
+    return row.c;
   }
 
   markContacted(id: number): void {

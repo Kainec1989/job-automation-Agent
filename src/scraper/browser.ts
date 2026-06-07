@@ -81,6 +81,87 @@ export function getContextOptions(storageStatePath?: string): BrowserContextOpti
   return options;
 }
 
+export class SoftBlockError extends Error {
+  constructor(
+    public readonly host: string,
+    public readonly reason: string,
+  ) {
+    super(`Soft block on ${host}: ${reason}`);
+    this.name = 'SoftBlockError';
+  }
+}
+
+interface SoftBlockAlert {
+  host: string;
+  reason: string;
+}
+
+const softBlockAlerts: SoftBlockAlert[] = [];
+
+export function recordSoftBlock(host: string, reason: string): void {
+  if (!softBlockAlerts.some((alert) => alert.host === host && alert.reason === reason)) {
+    softBlockAlerts.push({ host, reason });
+  }
+}
+
+/** Returns and clears accumulated soft-block alerts collected during the current run. */
+export function consumeSoftBlockAlerts(): SoftBlockAlert[] {
+  const alerts = [...softBlockAlerts];
+  softBlockAlerts.length = 0;
+  return alerts;
+}
+
+const SOFT_BLOCK_MARKERS = [
+  'captcha',
+  'verify you are human',
+  'are you a robot',
+  'unusual traffic',
+  'ungewöhnliche aktivität',
+  'bitte bestätigen',
+  'zugriff verweigert',
+  'access denied',
+  'attention required',
+  'cf-chl',
+];
+
+/** Heuristically detects captcha / login walls so an empty result isn't mistaken for "no jobs". */
+export async function detectSoftBlock(page: Page): Promise<string | null> {
+  try {
+    const url = page.url().toLowerCase();
+    if (url.includes('authwall') || url.includes('/checkpoint') || url.includes('captcha')) {
+      return 'login/checkpoint wall';
+    }
+
+    const title = (await page.title().catch(() => '')).toLowerCase();
+    const bodyText = (
+      await page
+        .locator('body')
+        .innerText({ timeout: 2_000 })
+        .catch(() => '')
+    )
+      .toLowerCase()
+      .slice(0, 3_000);
+
+    const haystack = `${title}\n${bodyText}`;
+    const marker = SOFT_BLOCK_MARKERS.find((needle) => haystack.includes(needle));
+    if (marker) {
+      return `marker: ${marker}`;
+    }
+
+    const challengeFrames = await page
+      .locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"]')
+      .count()
+      .catch(() => 0);
+    if (challengeFrames > 0) {
+      return 'captcha iframe';
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function logBlockedPageHelp(status: number, url: string): void {
   if (status !== 403 && status !== 429) {
     return;
@@ -112,20 +193,64 @@ async function navigateAndScrapePage(
     context: BrowserContext,
   ) => Promise<import('../database/types.js').ScrapedVacancy[]>,
 ): Promise<import('../database/types.js').ScrapedVacancy[]> {
-  console.log(`Navigating to: ${searchUrl}`);
-  const response = await page.goto(searchUrl, {
-    waitUntil: 'domcontentloaded',
-    timeout: 60_000,
-  });
+  const host = new URL(searchUrl).hostname;
+  const maxAttempts = Math.max(1, env.scrapeMaxRetries + 1);
 
-  const status = response?.status() ?? 0;
-  if (!response || !response.ok()) {
-    logBlockedPageHelp(status, searchUrl);
-    throw new Error(`Page load failed with status: ${status || 'unknown'}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      console.log(`Navigating to: ${searchUrl}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+      const response = await page.goto(searchUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+      });
+
+      const status = response?.status() ?? 0;
+      if (!response || !response.ok()) {
+        // 403/429 are anti-bot blocks — don't waste retries hammering them.
+        if (status === 403 || status === 429) {
+          logBlockedPageHelp(status, searchUrl);
+          recordSoftBlock(host, `HTTP ${status}`);
+          throw new SoftBlockError(host, `HTTP ${status}`);
+        }
+
+        if (status >= 500 && attempt < maxAttempts) {
+          console.warn(`[Browser] ${host} returned ${status}, retrying...`);
+          await sleep(2_000 * attempt);
+          continue;
+        }
+
+        throw new Error(`Page load failed with status: ${status || 'unknown'}`);
+      }
+
+      await page.waitForTimeout(2_500);
+      const vacancies = await scrapePage(page, context);
+
+      if (vacancies.length === 0) {
+        const reason = await detectSoftBlock(page);
+        if (reason) {
+          recordSoftBlock(host, reason);
+          throw new SoftBlockError(host, reason);
+        }
+      }
+
+      return vacancies;
+    } catch (error) {
+      if (error instanceof SoftBlockError) {
+        throw error;
+      }
+
+      if (attempt < maxAttempts) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Browser] Navigation error (${message}), retrying ${attempt}/${maxAttempts - 1}...`);
+        await sleep(2_000 * attempt);
+        continue;
+      }
+
+      throw error;
+    }
   }
 
-  await page.waitForTimeout(2_500);
-  return scrapePage(page, context);
+  return [];
 }
 
 export async function scrapeSearchUrl(
@@ -198,9 +323,16 @@ export async function scrapePaginatedSearch(
           break;
         }
       } catch (error) {
+        if (error instanceof SoftBlockError) {
+          console.warn(
+            `[${sourceLabel}] Soft block detected (${error.reason}) — stopping pagination.`,
+          );
+          break;
+        }
+
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[${sourceLabel}] Page ${pageIndex + 1} failed: ${message}`);
-        break;
+        console.warn(`[${sourceLabel}] Page ${pageIndex + 1} failed: ${message} — skipping page.`);
+        continue;
       }
     }
   } finally {

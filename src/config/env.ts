@@ -100,10 +100,13 @@ const descriptionFetchDelayMs = Number(optionalEnv('DESCRIPTION_FETCH_DELAY_MS',
 const extractEmail = optionalEnv('EXTRACT_EMAIL', 'true') !== 'false';
 const scrapeMaxPages = Number(optionalEnv('SCRAPE_MAX_PAGES', '3'));
 const scrapePageDelayMs = Number(optionalEnv('SCRAPE_PAGE_DELAY_MS', '5000'));
+const scrapeMaxRetries = Number(optionalEnv('SCRAPE_MAX_RETRIES', '2'));
 const tavilyLookupDelayMs = Number(optionalEnv('TAVILY_LOOKUP_DELAY_MS', '1500'));
 const tavilyMaxQueriesPerLookup = Number(optionalEnv('TAVILY_MAX_QUERIES_PER_LOOKUP', '2'));
 const tavilyExtractEnabled = optionalEnv('TAVILY_EXTRACT_ENABLED', 'true') !== 'false';
 const tavilyMaxExtractUrls = Number(optionalEnv('TAVILY_MAX_EXTRACT_URLS', '3'));
+const tavilyNegativeCacheTtlDays = Number(optionalEnv('TAVILY_NEGATIVE_CACHE_TTL_DAYS', '14'));
+const tavilyMaxRetries = Number(optionalEnv('TAVILY_MAX_RETRIES', '2'));
 export const env = {
   databasePath: resolve(optionalEnv('DATABASE_PATH', './data/vacancies.db')),
 
@@ -123,6 +126,7 @@ export const env = {
   extractEmail,
   scrapeMaxPages,
   scrapePageDelayMs,
+  scrapeMaxRetries,
   enabledScrapers: parseScraperList(optionalEnv('SCRAPERS', 'stepstone,linkedin')),
 
   indeedSearchUrls: [
@@ -140,13 +144,27 @@ export const env = {
 
   testEmailTo: optionalEnv('TEST_EMAIL_TO', ''),
   testAttachmentPath: resolve(optionalEnv('TEST_ATTACHMENT_PATH', './assets/Lebenslauf.pdf')),
+  // Production CV used for real applications. Falls back to TEST_ATTACHMENT_PATH for backward compatibility.
+  resumePath: resolve(
+    optionalEnv('RESUME_PATH', optionalEnv('TEST_ATTACHMENT_PATH', './assets/Lebenslauf.pdf')),
+  ),
   dciCertificatePath: resolveOptionalAttachmentPath(
     'DCI_CERTIFICATE_PATH',
     './assets/Zertifikat_Plugin, Vladyslav_FbW WD 24-E03.pdf',
   ),
   applicantName: optionalEnv('APPLICANT_NAME', 'Ihr Name'),
+  applicantEmail: optionalEnv('APPLICANT_EMAIL', ''),
+  applicantPhone: optionalEnv('APPLICANT_PHONE', ''),
+  applicantLocation: optionalEnv('APPLICANT_LOCATION', ''),
+  dciGraduation: optionalEnv('DCI_GRADUATION', 'Mai 2025'),
   dispatchLimit: Number(optionalEnv('DISPATCH_LIMIT', '15')),
   dispatchMaxRetries: Number(optionalEnv('DISPATCH_MAX_RETRIES', '3')),
+  dispatchRequireApproval: optionalEnv('DISPATCH_REQUIRE_APPROVAL', 'false') === 'true',
+  dispatchApprovalTimeoutMs: Number(optionalEnv('DISPATCH_APPROVAL_TIMEOUT_MS', '600000')),
+  dispatchMaxPerDomainPerDay: Number(optionalEnv('DISPATCH_MAX_PER_DOMAIN_PER_DAY', '1')),
+  doNotContact: parseKeywordList(optionalEnv('DO_NOT_CONTACT', '')).map((entry) =>
+    entry.toLowerCase(),
+  ),
   pipelineNotifyEnabled: optionalEnv('PIPELINE_NOTIFY_ENABLED', 'false') === 'true',
   pipelineNotifyEmail: optionalEnv('PIPELINE_NOTIFY_EMAIL', 'true') !== 'false',
   notifyEmailTo: optionalEnv('NOTIFY_EMAIL_TO', ''),
@@ -163,6 +181,8 @@ export const env = {
   tavilyMaxQueriesPerLookup,
   tavilyExtractEnabled,
   tavilyMaxExtractUrls,
+  tavilyNegativeCacheTtlDays,
+  tavilyMaxRetries,
 } as const;
 
 export interface TavilyConfig {
@@ -205,6 +225,31 @@ export function getTavilyConfig(): TavilyConfig {
     maxLookups: Number(optionalEnv('TAVILY_MAX_LOOKUPS', '25')),
     extractEnabled: optionalEnv('TAVILY_EXTRACT_ENABLED', 'true') !== 'false',
     maxExtractUrls: Number(optionalEnv('TAVILY_MAX_EXTRACT_URLS', '3')),
+  };
+}
+
+export type LlmProvider = 'openai' | 'anthropic';
+
+export interface LlmConfig {
+  enabled: boolean;
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
+}
+
+export function isLlmConfigured(): boolean {
+  return optionalEnv('LLM_ENABLED', 'false') === 'true' && Boolean(process.env.LLM_API_KEY?.trim());
+}
+
+export function getLlmConfig(): LlmConfig {
+  const provider = optionalEnv('LLM_PROVIDER', 'openai') === 'anthropic' ? 'anthropic' : 'openai';
+  const defaultModel = provider === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini';
+
+  return {
+    enabled: optionalEnv('LLM_ENABLED', 'false') === 'true',
+    provider,
+    apiKey: process.env.LLM_API_KEY?.trim() ?? '',
+    model: optionalEnv('LLM_MODEL', defaultModel),
   };
 }
 

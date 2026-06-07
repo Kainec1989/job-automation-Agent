@@ -1,7 +1,7 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { getContextOptions, scrapePaginatedSearch, sleep } from './browser.js';
+import { getContextOptions, recordSoftBlock, scrapePaginatedSearch, sleep } from './browser.js';
 import { buildIndeedPageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
@@ -94,6 +94,13 @@ async function scrapeAllIndeedSearches(browser: Browser): Promise<ScrapedVacancy
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[Indeed] Skipping search after error: ${message}`);
     }
+  }
+
+  if (merged.size === 0 && env.indeedStorageState) {
+    console.warn(
+      '[Indeed] No vacancies with a saved session — the Indeed session may be expired. Re-run: npm run auth:indeed',
+    );
+    recordSoftBlock('indeed.com', 'no results with saved session (possibly expired)');
   }
 
   return [...merged.values()];

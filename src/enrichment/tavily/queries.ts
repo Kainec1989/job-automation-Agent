@@ -1,8 +1,28 @@
+import { AGGREGATOR_HOSTS } from './constants.js';
 import type { TavilyEmailLookupInput } from './types.js';
 
 export interface HrEmailQueryStrategy {
   name: string;
   query: string;
+}
+
+/** Domain hint from the scraped job URL — only when it is a real company site, not an aggregator. */
+export function domainHintsFromUrl(jobUrl?: string | null): string[] {
+  if (!jobUrl) {
+    return [];
+  }
+
+  try {
+    const host = new URL(jobUrl).hostname.toLowerCase().replace(/^www\./, '');
+    if (AGGREGATOR_HOSTS.some((blocked) => host.includes(blocked))) {
+      return [];
+    }
+
+    const base = host.split('.')[0] ?? '';
+    return base.length >= 3 ? [base, host] : [];
+  } catch {
+    return [];
+  }
 }
 
 const LEGAL_SUFFIX_REGEX =
@@ -47,11 +67,11 @@ export function buildHrEmailSearchQueries(input: TavilyEmailLookupInput): HrEmai
   const compact = compactCompanyName(company);
   const germanEmployer = isLikelyGermanEmployer(company);
 
-  const domainHints = buildDomainHints(company);
+  const domainHints = [...new Set([...buildDomainHints(company), ...domainHintsFromUrl(input.jobUrl)])];
 
   const strategies: HrEmailQueryStrategy[] = [];
 
-  if (germanEmployer && domainHints.length > 0) {
+  if (domainHints.length > 0 && (germanEmployer || domainHintsFromUrl(input.jobUrl).length > 0)) {
     strategies.push({
       name: 'domain-impressum',
       query: [
@@ -88,6 +108,16 @@ export function buildHrEmailSearchQueries(input: TavilyEmailLookupInput): HrEmai
     strategies.push({
       name: 'compact-name',
       query: `"${compact}" Karriere Impressum Bewerbung email kontakt`.trim(),
+    });
+  }
+
+  // Last-resort strategy that brings in the job title. Kept last because titles tend to pull
+  // job aggregators; it only runs when earlier company-focused strategies are exhausted.
+  const title = input.title?.trim();
+  if (title) {
+    strategies.push({
+      name: 'title-company',
+      query: `"${company}" "${title}" Bewerbung Kontakt E-Mail Impressum`,
     });
   }
 

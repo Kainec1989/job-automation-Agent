@@ -55,6 +55,8 @@ const mockSummary = {
       },
     ],
     failures: [],
+    skippedBlocked: 0,
+    approvalDeclined: false,
   },
 };
 

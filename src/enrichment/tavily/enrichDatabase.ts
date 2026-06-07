@@ -64,7 +64,9 @@ export async function enrichVacanciesWithTavily(
     summary.processed += 1;
 
     try {
-      const cached = getTavilyEmailCache(vacancy.company);
+      const cached = getTavilyEmailCache(vacancy.company, {
+        negativeTtlDays: env.tavilyNegativeCacheTtlDays,
+      });
       let result: TavilyEmailLookupResult;
 
       if (cached) {

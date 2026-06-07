@@ -3,8 +3,9 @@ import { VacancyRepository } from '../database/vacancyRepository.js';
 import { env } from '../config/env.js';
 import { isPlausibleHrEmail } from '../scraper/hrEmailValidation.js';
 import { EmailService } from '../sender/emailService.js';
-import type { VacancyType } from '../database/types.js';
+import type { PendingVacancy, VacancyType } from '../database/types.js';
 import { syncDatabaseToSheets } from '../sheets/syncDatabaseToSheets.js';
+import { emailDomain, isDoNotContact, requestDispatchApproval } from './dispatchGuards.js';
 
 export interface DispatchedApplication {
   company: string;
@@ -27,6 +28,8 @@ export interface DispatchSummary {
   failed: number;
   markedFailed: number;
   skippedInvalidEmail: number;
+  skippedBlocked: number;
+  approvalDeclined: boolean;
   sentApplications: DispatchedApplication[];
   failures: DispatchFailure[];
 }
@@ -37,21 +40,56 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
   let failed = 0;
   let markedFailed = 0;
   let skippedInvalidEmail = 0;
+  let skippedBlocked = 0;
+  let approvalDeclined = false;
   const sentApplications: DispatchedApplication[] = [];
   const failures: DispatchFailure[] = [];
 
-  const pendingJobs = repository.findPendingWithEmail(env.dispatchLimit, env.dispatchMaxRetries);
+  const buildSummary = (): DispatchSummary => ({
+    sent,
+    failed,
+    markedFailed,
+    skippedInvalidEmail,
+    skippedBlocked,
+    approvalDeclined,
+    sentApplications,
+    failures,
+  });
+
+  const candidates = repository.findPendingWithEmail(env.dispatchLimit, env.dispatchMaxRetries);
+
+  // Filter out blocked recipients (DO_NOT_CONTACT) before asking for approval or sending.
+  const pendingJobs: PendingVacancy[] = [];
+  for (const job of candidates) {
+    if (isDoNotContact(job.company, job.email)) {
+      console.warn(
+        `[Dispatcher] Blocked by DO_NOT_CONTACT: ${job.company} <${job.email}> (id=${job.id})`,
+      );
+      repository.recordDispatchEvent({
+        vacancyId: job.id,
+        company: job.company,
+        email: job.email,
+        outcome: 'skipped_duplicate',
+        error: 'do_not_contact',
+      });
+      skippedBlocked += 1;
+      continue;
+    }
+    pendingJobs.push(job);
+  }
 
   if (pendingJobs.length === 0) {
     console.log('[Dispatcher] No pending vacancies with email.');
-    return {
-      sent,
-      failed,
-      markedFailed,
-      skippedInvalidEmail,
-      sentApplications,
-      failures,
-    };
+    return buildSummary();
+  }
+
+  if (env.dispatchRequireApproval) {
+    const approved = await requestDispatchApproval(pendingJobs);
+    if (!approved) {
+      approvalDeclined = true;
+      console.log('[Dispatcher] Dispatch not approved — nothing sent.');
+      return buildSummary();
+    }
   }
 
   const emailService = new EmailService();
@@ -66,10 +104,36 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
     const emailKey = job.email.trim().toLowerCase();
     const companyKey = job.company.trim().toLowerCase();
 
+    const domain = emailDomain(emailKey);
+    if (
+      env.dispatchMaxPerDomainPerDay > 0 &&
+      domain &&
+      repository.countSentToDomainToday(domain) >= env.dispatchMaxPerDomainPerDay
+    ) {
+      console.log(
+        `[Dispatcher] Per-domain daily limit reached for ${domain} — skipping ${job.company} (id=${job.id})`,
+      );
+      repository.recordDispatchEvent({
+        vacancyId: job.id,
+        company: job.company,
+        email: job.email,
+        outcome: 'skipped_duplicate',
+        error: 'domain_daily_limit',
+      });
+      skippedBlocked += 1;
+      continue;
+    }
+
     if (sentEmails.has(emailKey) || sentCompanies.has(companyKey)) {
       console.log(
         `[Dispatcher] Skipping duplicate in this run: ${job.company} <${job.email}> (id=${job.id})`,
       );
+      repository.recordDispatchEvent({
+        vacancyId: job.id,
+        company: job.company,
+        email: job.email,
+        outcome: 'skipped_duplicate',
+      });
       continue;
     }
 
@@ -78,6 +142,12 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
         `[Dispatcher] Skipping invalid email ${job.email} for ${job.company} (id=${job.id})`,
       );
       repository.clearEmail(job.id);
+      repository.recordDispatchEvent({
+        vacancyId: job.id,
+        company: job.company,
+        email: job.email,
+        outcome: 'skipped_invalid_email',
+      });
       skippedInvalidEmail += 1;
       continue;
     }
@@ -85,6 +155,12 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
     try {
       await emailService.sendApplicationEmail(job, job.email);
       repository.markContacted(job.id);
+      repository.recordDispatchEvent({
+        vacancyId: job.id,
+        company: job.company,
+        email: job.email,
+        outcome: 'sent',
+      });
       sentEmails.add(emailKey);
       sentCompanies.add(companyKey);
       sent += 1;
@@ -99,6 +175,13 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
       failed += 1;
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[Dispatcher] Failed job ID ${job.id}: ${message}`);
+      repository.recordDispatchEvent({
+        vacancyId: job.id,
+        company: job.company,
+        email: job.email,
+        outcome: 'failed',
+        error: message,
+      });
 
       let outcome: 'retry' | 'failed' = 'retry';
       try {
@@ -131,7 +214,8 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
   }
 
   console.log(
-    `[Dispatcher] Done. Sent: ${sent}, failed: ${failed}, marked failed: ${markedFailed}, invalid email skipped: ${skippedInvalidEmail}`,
+    `[Dispatcher] Done. Sent: ${sent}, failed: ${failed}, marked failed: ${markedFailed}, ` +
+      `invalid email skipped: ${skippedInvalidEmail}, blocked/limited: ${skippedBlocked}`,
   );
 
   if (sent > 0 && env.googleSpreadsheetId) {
@@ -145,14 +229,7 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
     }
   }
 
-  return {
-    sent,
-    failed,
-    markedFailed,
-    skippedInvalidEmail,
-    sentApplications,
-    failures,
-  };
+  return buildSummary();
 }
 
 /** @deprecated Use runDispatchApplications */

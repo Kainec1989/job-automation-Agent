@@ -46,3 +46,13 @@ export interface PendingVacancy {
   description: string | null;
   dispatchRetryCount: number;
 }
+
+export type DispatchOutcome = 'sent' | 'failed' | 'skipped_invalid_email' | 'skipped_duplicate';
+
+export interface DispatchEventInput {
+  vacancyId: number;
+  company: string;
+  email: string | null;
+  outcome: DispatchOutcome;
+  error?: string | null;
+}

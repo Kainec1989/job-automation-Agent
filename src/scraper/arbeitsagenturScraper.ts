@@ -52,10 +52,9 @@ async function searchPage(keywords: string, page: number): Promise<Arbeitsagentu
 }
 
 async function scrapeKeywordSet(
-  keywords: string[],
+  query: string,
   merged: Map<string, ScrapedVacancy>,
 ): Promise<void> {
-  const query = keywords.join(' ');
   if (!query.trim()) {
     return;
   }
@@ -112,8 +111,10 @@ async function scrapeKeywordSet(
 
 async function scrapeAllArbeitsagentur(_browser: Browser): Promise<ScrapedVacancy[]> {
   const merged = new Map<string, ScrapedVacancy>();
-  await scrapeKeywordSet(env.keywordsJunior, merged);
-  await scrapeKeywordSet(env.keywordsPraktikum, merged);
+  // One query per keyword entry (joining them over-constrains the search).
+  for (const keyword of [...env.keywordsJunior, ...env.keywordsPraktikum]) {
+    await scrapeKeywordSet(keyword, merged);
+  }
   return [...merged.values()];
 }
 

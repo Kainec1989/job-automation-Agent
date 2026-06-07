@@ -129,18 +129,18 @@ export const env = {
   scrapeMaxRetries,
   enabledScrapers: parseScraperList(optionalEnv('SCRAPERS', 'stepstone,linkedin')),
 
-  indeedSearchUrls: [
-    buildIndeedSearchUrl(keywordsJunior, searchLocation, searchRadiusKm, indeedBaseUrl),
-    buildIndeedSearchUrl(keywordsPraktikum, searchLocation, searchRadiusKm, indeedBaseUrl),
-  ],
-  stepstoneSearchUrls: [
-    buildStepstoneSearchUrl(keywordsJunior, searchLocation, searchRadiusKm, stepstoneBaseUrl),
-    buildStepstoneSearchUrl(keywordsPraktikum, searchLocation, searchRadiusKm, stepstoneBaseUrl),
-  ],
-  linkedinSearchUrls: [
-    buildLinkedInSearchUrl(keywordsJunior, searchLocation, linkedinDistanceMiles, linkedinBaseUrl),
-    buildLinkedInSearchUrl(keywordsPraktikum, searchLocation, linkedinDistanceMiles, linkedinBaseUrl),
-  ],
+  // Search each keyword entry separately. Joining them produced a single
+  // "must match all words" query (e.g. ke=Junior+Developer+Testautomatisierer),
+  // which returns almost nothing on Stepstone.
+  indeedSearchUrls: [...keywordsJunior, ...keywordsPraktikum].map((keyword) =>
+    buildIndeedSearchUrl([keyword], searchLocation, searchRadiusKm, indeedBaseUrl),
+  ),
+  stepstoneSearchUrls: [...keywordsJunior, ...keywordsPraktikum].map((keyword) =>
+    buildStepstoneSearchUrl([keyword], searchLocation, searchRadiusKm, stepstoneBaseUrl),
+  ),
+  linkedinSearchUrls: [...keywordsJunior, ...keywordsPraktikum].map((keyword) =>
+    buildLinkedInSearchUrl([keyword], searchLocation, linkedinDistanceMiles, linkedinBaseUrl),
+  ),
 
   testEmailTo: optionalEnv('TEST_EMAIL_TO', ''),
   testAttachmentPath: resolve(optionalEnv('TEST_ATTACHMENT_PATH', './assets/Lebenslauf.pdf')),

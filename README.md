@@ -7,22 +7,24 @@ Node.js/TypeScript pipeline for automated job search and applications on the Ger
 ## Features
 
 - **Scraping** — Indeed, Stepstone, LinkedIn via Playwright (system Chrome) + Arbeitsagentur (captcha-free JSON API)
+- **Per-keyword search** — each keyword entry is searched as its own query (no over-constrained "match all words" search)
 - **Resilient scraping** — soft-block/captcha detection with Telegram alerts, navigation retries, stale-session warnings
 - **Full job descriptions** — fetches detail pages, not only listing snippets
 - **IT classifier** — filters by tech stack, seniority, and non-IT roles
 - **SQLite storage** — deduplicated vacancies (incl. cross-board dedup) with status tracking
 - **Google Sheets sync** — export to Sheets, import HR emails back to DB
-- **HR email lookup** — Tavily search/extract with caching (re-tries stale negatives) and API retries
+- **HR email lookup** — Tavily search/extract with caching (re-tries stale negatives) and API retries; one lookup per distinct company
 - **Email dispatch** — tailored German cover letter (DIN 5008 PDF), CV, DCI certificate
-- **LLM cover letters** — optional per-vacancy Anschreiben generation with template fallback
+- **LLM cover letters** — optional per-vacancy Anschreiben (PDF) **and** a short, natural inbox email body, with template fallback
 - **Safety controls** — Telegram approval before sending, do-not-contact list, per-domain daily caps, dispatch history, DB backups
+- **DB health & maintenance** — post-run health checks (backup freshness, dispatch history), migration ledger, incremental auto-vacuum
 - **Stats** — rejection reasons per scrape run
 
 ## Tech Stack
 
 | Area | Tools |
 |------|--------|
-| Runtime | Node.js 20+, TypeScript (ESM) |
+| Runtime | Node.js 22+, TypeScript (ESM) |
 | Scraping | Playwright, Google Chrome |
 | Database | SQLite (`better-sqlite3`) |
 | Email | Nodemailer, PDFKit |
@@ -134,6 +136,9 @@ For OpenAI-compatible free providers, set `LLM_PROVIDER=openai` plus `LLM_BASE_U
 
 Every send attempt (sent / failed / skipped) is recorded in the `dispatch_events` table, and
 `scripts/run-daily-pipeline.sh` backs up the SQLite DB to `data/backups/` (keeps the newest 14).
+After each run, health checks flag a missing/stale backup or dispatch history that failed to record,
+and surface those warnings in the notification. Applied migrations are tracked in a `schema_migrations`
+ledger, and the DB uses incremental `auto_vacuum` to stay compact.
 
 Cron (12:00 daily):
 
@@ -168,13 +173,15 @@ npm run tavily:enrich -- --limit 3
 npm run tavily:enrich -- --limit 5 --dry-run
 ```
 
-Settings: `TAVILY_SEARCH_DEPTH` (`basic` = 1 credit), `TAVILY_MAX_RESULTS`, `TAVILY_MAX_LOOKUPS`, `TAVILY_MAX_QUERIES_PER_LOOKUP`, `TAVILY_EXTRACT_ENABLED` (fetch impressum/karriere pages when search snippets lack email), `TAVILY_MAX_EXTRACT_URLS`.
+Enrichment looks up **one representative vacancy per company**, so a daily batch of `TAVILY_MAX_LOOKUPS` covers that many distinct companies instead of being eaten by a single company with many postings.
+
+Settings: `TAVILY_SEARCH_DEPTH` (`basic` = 1 credit), `TAVILY_MAX_RESULTS`, `TAVILY_MAX_LOOKUPS`, `TAVILY_MAX_QUERIES_PER_LOOKUP`, `TAVILY_EXTRACT_ENABLED` (fetch impressum/karriere pages when search snippets lack email), `TAVILY_MAX_EXTRACT_URLS`, `TAVILY_NEGATIVE_CACHE_TTL_DAYS` (re-try not-found companies after N days), `TAVILY_MAX_RETRIES`.
 
 ## Project Structure
 
 ```
 src/
-├── scraper/          # Indeed, Stepstone, LinkedIn + classifier
+├── scraper/          # Indeed, Stepstone, LinkedIn, Arbeitsagentur + classifier
 ├── database/         # SQLite schema & repository
 ├── sender/           # Anschreiben templates, email, PDF
 ├── dispatcher/       # Application pipeline
@@ -195,7 +202,8 @@ npm run auth:status     # verify session files
 npm run scrape
 ```
 
-- Default `SCRAPERS=stepstone,linkedin` — Indeed disabled until session works
+- Recommended `SCRAPERS=stepstone,linkedin,arbeitsagentur` — Arbeitsagentur needs no browser/session
+- Add `indeed` once `auth:indeed` works (it often returns 403 headless)
 - Session files in `./data/` are auto-detected even without `.env` paths
 - If you get 403: set `BROWSER_HEADLESS=false` or increase `SEARCH_DELAY_MS`
 
@@ -203,9 +211,9 @@ npm run scrape
 
 See [`.env.example`](.env.example). Important variables:
 
-- `SCRAPERS` — default `stepstone,linkedin`; add `indeed` after `auth:indeed`
+- `SCRAPERS` — recommended `stepstone,linkedin,arbeitsagentur`; add `indeed` after `auth:indeed`
 - `LINKEDIN_STORAGE_STATE` / `INDEED_STORAGE_STATE` — paths to saved sessions
-- `KEYWORDS_JUNIOR` / `KEYWORDS_PRAKTIKUM` — search terms
+- `KEYWORDS_JUNIOR` / `KEYWORDS_PRAKTIKUM` — comma-separated; **each entry is searched as its own query**, so use complete role phrases (e.g. `Junior Developer`), not single broad words like `Junior`
 - `SEARCH_LOCATION` / `SEARCH_RADIUS_KM` — default: Leipzig, 150 km
 - `FETCH_FULL_DESCRIPTION` — load full job text before classification
 - `EXTRACT_EMAIL` — parse HR emails from job pages into DB (default: on)

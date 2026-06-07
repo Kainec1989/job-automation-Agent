@@ -23,8 +23,8 @@ if ! flock -n 9; then
   exit 0
 fi
 
-npm run pipeline:daily
-EXIT_CODE=$?
+EXIT_CODE=0
+npm run pipeline:daily || EXIT_CODE=$?
 
 echo "=== Pipeline finished $(date -Iseconds) exit=${EXIT_CODE} ==="
 exit "$EXIT_CODE"

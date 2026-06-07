@@ -59,7 +59,20 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
   console.log(`[Dispatcher] Processing ${pendingJobs.length} vacancy(ies)...`);
   await emailService.verifyConnection();
 
+  const sentEmails = new Set<string>();
+  const sentCompanies = new Set<string>();
+
   for (const job of pendingJobs) {
+    const emailKey = job.email.trim().toLowerCase();
+    const companyKey = job.company.trim().toLowerCase();
+
+    if (sentEmails.has(emailKey) || sentCompanies.has(companyKey)) {
+      console.log(
+        `[Dispatcher] Skipping duplicate in this run: ${job.company} <${job.email}> (id=${job.id})`,
+      );
+      continue;
+    }
+
     if (!isPlausibleHrEmail(job.email, job.company)) {
       console.warn(
         `[Dispatcher] Skipping invalid email ${job.email} for ${job.company} (id=${job.id})`,
@@ -72,6 +85,8 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
     try {
       await emailService.sendApplicationEmail(job, job.email);
       repository.markContacted(job.id);
+      sentEmails.add(emailKey);
+      sentCompanies.add(companyKey);
       sent += 1;
       sentApplications.push({
         company: job.company,

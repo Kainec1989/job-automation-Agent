@@ -145,7 +145,7 @@ export const env = {
     './assets/Zertifikat_Plugin, Vladyslav_FbW WD 24-E03.pdf',
   ),
   applicantName: optionalEnv('APPLICANT_NAME', 'Ihr Name'),
-  dispatchLimit: Number(optionalEnv('DISPATCH_LIMIT', '10')),
+  dispatchLimit: Number(optionalEnv('DISPATCH_LIMIT', '15')),
   dispatchMaxRetries: Number(optionalEnv('DISPATCH_MAX_RETRIES', '3')),
   pipelineNotifyEnabled: optionalEnv('PIPELINE_NOTIFY_ENABLED', 'false') === 'true',
   pipelineNotifyEmail: optionalEnv('PIPELINE_NOTIFY_EMAIL', 'true') !== 'false',
@@ -202,7 +202,7 @@ export function getTavilyConfig(): TavilyConfig {
     searchDepth,
     extractDepth,
     maxResults: Number(optionalEnv('TAVILY_MAX_RESULTS', '5')),
-    maxLookups: Number(optionalEnv('TAVILY_MAX_LOOKUPS', '5')),
+    maxLookups: Number(optionalEnv('TAVILY_MAX_LOOKUPS', '25')),
     extractEnabled: optionalEnv('TAVILY_EXTRACT_ENABLED', 'true') !== 'false',
     maxExtractUrls: Number(optionalEnv('TAVILY_MAX_EXTRACT_URLS', '3')),
   };

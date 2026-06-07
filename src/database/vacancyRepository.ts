@@ -223,10 +223,13 @@ export class VacancyRepository {
   findPendingWithEmail(limit: number, maxRetries: number): PendingVacancy[] {
     const db = getDatabase();
 
+    // De-duplicates so we never email the same company or HR address twice:
+    //  - excludes companies/emails that already have a contacted/replied/rejected row
+    //  - returns at most one representative row per company among eligible 'new' rows
     return db
       .prepare(`
         SELECT id, title, company, type, email, description, dispatch_retry_count
-        FROM vacancies
+        FROM vacancies v
         WHERE status = 'new'
           AND email IS NOT NULL
           AND trim(email) != ''
@@ -235,10 +238,35 @@ export class VacancyRepository {
             last_dispatch_at IS NULL
             OR date(last_dispatch_at) < date('now')
           )
+          AND lower(trim(company)) NOT IN (
+            SELECT lower(trim(company))
+            FROM vacancies
+            WHERE status IN ('contacted', 'replied', 'rejected')
+          )
+          AND lower(trim(email)) NOT IN (
+            SELECT lower(trim(email))
+            FROM vacancies
+            WHERE email IS NOT NULL
+              AND trim(email) != ''
+              AND status IN ('contacted', 'replied', 'rejected')
+          )
+          AND id = (
+            SELECT min(v2.id)
+            FROM vacancies v2
+            WHERE lower(trim(v2.company)) = lower(trim(v.company))
+              AND v2.status = 'new'
+              AND v2.email IS NOT NULL
+              AND trim(v2.email) != ''
+              AND v2.dispatch_retry_count < ?
+              AND (
+                v2.last_dispatch_at IS NULL
+                OR date(v2.last_dispatch_at) < date('now')
+              )
+          )
         ORDER BY created_at ASC
         LIMIT ?
       `)
-      .all(maxRetries, limit) as PendingVacancy[];
+      .all(maxRetries, maxRetries, limit) as PendingVacancy[];
   }
 
   recordDispatchFailure(id: number, error: string, maxRetries: number): 'retry' | 'failed' {

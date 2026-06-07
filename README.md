@@ -121,10 +121,16 @@ RESUME_PATH=./assets/Lebenslauf.pdf
 
 # Optional LLM-generated Anschreiben (falls back to the template when off/unavailable)
 LLM_ENABLED=false
-LLM_PROVIDER=openai               # openai | anthropic
-LLM_API_KEY=
-LLM_MODEL=gpt-4o-mini
+LLM_PROVIDER=gemini               # gemini (free) | openai | anthropic
+LLM_API_KEY=                      # Gemini key: https://aistudio.google.com/apikey
+LLM_MODEL=                        # empty = provider default (gemini-2.5-flash)
+LLM_BASE_URL=                     # OpenAI-compatible providers (Groq / OpenRouter)
 ```
+
+Recommended free source: **Google Gemini** (AI Studio) — 1,500 requests/day, no credit card.
+Set `LLM_PROVIDER=gemini` and paste a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+For OpenAI-compatible free providers, set `LLM_PROVIDER=openai` plus `LLM_BASE_URL` (e.g. Groq:
+`https://api.groq.com/openai/v1` with `LLM_MODEL=llama-3.3-70b-versatile`).
 
 Every send attempt (sent / failed / skipped) is recorded in the `dispatch_events` table, and
 `scripts/run-daily-pipeline.sh` backs up the SQLite DB to `data/backups/` (keeps the newest 14).

@@ -228,13 +228,33 @@ export function getTavilyConfig(): TavilyConfig {
   };
 }
 
-export type LlmProvider = 'openai' | 'anthropic';
+export type LlmProvider = 'openai' | 'anthropic' | 'gemini';
 
 export interface LlmConfig {
   enabled: boolean;
   provider: LlmProvider;
   apiKey: string;
   model: string;
+  /** Optional override for OpenAI-compatible providers (e.g. Groq, OpenRouter). */
+  baseUrl: string;
+}
+
+function parseLlmProvider(value: string): LlmProvider {
+  if (value === 'anthropic' || value === 'gemini') {
+    return value;
+  }
+  return 'openai';
+}
+
+function defaultModelForProvider(provider: LlmProvider): string {
+  switch (provider) {
+    case 'gemini':
+      return 'gemini-2.5-flash';
+    case 'anthropic':
+      return 'claude-3-5-haiku-latest';
+    default:
+      return 'gpt-4o-mini';
+  }
 }
 
 export function isLlmConfigured(): boolean {
@@ -242,14 +262,14 @@ export function isLlmConfigured(): boolean {
 }
 
 export function getLlmConfig(): LlmConfig {
-  const provider = optionalEnv('LLM_PROVIDER', 'openai') === 'anthropic' ? 'anthropic' : 'openai';
-  const defaultModel = provider === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini';
+  const provider = parseLlmProvider(optionalEnv('LLM_PROVIDER', 'gemini'));
 
   return {
     enabled: optionalEnv('LLM_ENABLED', 'false') === 'true',
     provider,
     apiKey: process.env.LLM_API_KEY?.trim() ?? '',
-    model: optionalEnv('LLM_MODEL', defaultModel),
+    model: optionalEnv('LLM_MODEL', defaultModelForProvider(provider)),
+    baseUrl: optionalEnv('LLM_BASE_URL', ''),
   };
 }
 

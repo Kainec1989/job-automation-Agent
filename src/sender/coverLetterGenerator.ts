@@ -69,7 +69,8 @@ function buildPrompt(input: CoverLetterInput): string {
 }
 
 async function callOpenAi(config: LlmConfig, prompt: string): Promise<string> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const baseUrl = (config.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -131,6 +132,38 @@ async function callAnthropic(config: LlmConfig, prompt: string): Promise<string>
   return data.content?.[0]?.text ?? '';
 }
 
+async function callGemini(config: LlmConfig, prompt: string): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    config.model,
+  )}:generateContent`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': config.apiKey,
+    },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.6,
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Gemini API error ${response.status}: ${detail.slice(0, 200)}`);
+  }
+
+  const data = (await response.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+
+  return data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
+}
+
 function parseResponse(raw: string): CachedCoverLetter | null {
   if (!raw.trim()) {
     return null;
@@ -178,10 +211,14 @@ export async function generateAnschreiben(
 
   try {
     const prompt = buildPrompt(input);
-    const raw =
-      config.provider === 'anthropic'
-        ? await callAnthropic(config, prompt)
-        : await callOpenAi(config, prompt);
+    let raw: string;
+    if (config.provider === 'gemini') {
+      raw = await callGemini(config, prompt);
+    } else if (config.provider === 'anthropic') {
+      raw = await callAnthropic(config, prompt);
+    } else {
+      raw = await callOpenAi(config, prompt);
+    }
 
     const result = parseResponse(raw);
     if (!result) {

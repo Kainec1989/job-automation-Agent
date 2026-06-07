@@ -55,16 +55,25 @@ function buildPrompt(input: CoverLetterInput): string {
     `- Art: ${input.type === 'praktikum' ? 'Praktikum' : 'Festanstellung (Junior)'}`,
     `- Beschreibung: ${(input.description ?? '').slice(0, 2500) || '(keine Beschreibung verfügbar)'}`,
     '',
-    'Anforderungen an das Anschreiben:',
+    'Anforderungen an das vollständige Anschreiben (Feld "body", kommt als PDF-Anhang):',
     '- Sprache: Deutsch, professionell, natürlich, nicht generisch.',
     '- Maximal ca. 250 Wörter, 3–4 kurze Absätze.',
     `- ${salutationHint}`,
     '- Beziehe dich konkret auf die Stelle und passende Skills aus dem Lebenslauf.',
     '- Schließe mit "Mit freundlichen Grüßen" und dem Namen des Bewerbers.',
     '- Keine Platzhalter, keine eckigen Klammern, keine erfundenen Fakten.',
+    '- Es handelt sich um eine ausgeschriebene Stelle, KEINE Initiativbewerbung. Verwende daher NICHT die Wörter "initiativ" oder "Initiativbewerbung".',
     '',
-    'Antworte AUSSCHLIESSLICH als JSON-Objekt mit den Feldern "subject" und "body".',
-    'Das Feld "subject" ist die Betreffzeile, "body" der vollständige Anschreiben-Text mit Zeilenumbrüchen.',
+    'Anforderungen an den kurzen E-Mail-Text (Feld "emailBody", steht im Posteingang):',
+    '- Sehr kurz: 4–6 Sätze, KEINE Aufzählungen/Bulletpoints.',
+    '- Natürlich und menschlich, wie eine echte kurze Begleitnachricht — nicht das Anschreiben wiederholen.',
+    `- ${salutationHint}`,
+    '- Nenne in einem Satz, warum die Stelle passt, und verweise auf Lebenslauf und Anschreiben im Anhang.',
+    '- Es handelt sich um eine ausgeschriebene Stelle, KEINE Initiativbewerbung. Verwende daher NICHT die Wörter "initiativ" oder "Initiativbewerbung".',
+    '- Schließe mit "Mit freundlichen Grüßen" und dem Namen des Bewerbers.',
+    '',
+    'Antworte AUSSCHLIESSLICH als JSON-Objekt mit den Feldern "subject", "body" und "emailBody".',
+    '"subject" = Betreffzeile, "body" = vollständiger Anschreiben-Text (PDF), "emailBody" = kurzer E-Mail-Text. Alle mit Zeilenumbrüchen wo nötig.',
   ].join('\n');
 }
 
@@ -176,15 +185,21 @@ function parseResponse(raw: string): CachedCoverLetter | null {
   }
 
   try {
-    const parsed = JSON.parse(match[0]) as { subject?: unknown; body?: unknown };
+    const parsed = JSON.parse(match[0]) as {
+      subject?: unknown;
+      body?: unknown;
+      emailBody?: unknown;
+    };
     const subject = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
     const body = typeof parsed.body === 'string' ? parsed.body.trim() : '';
+    const emailBody = typeof parsed.emailBody === 'string' ? parsed.emailBody.trim() : '';
 
     if (!subject || !body) {
       return null;
     }
 
-    return { subject, body };
+    // emailBody is optional; the caller falls back to the template body when empty.
+    return { subject, body, emailBody };
   } catch {
     return null;
   }

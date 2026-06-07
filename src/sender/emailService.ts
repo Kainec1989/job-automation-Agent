@@ -114,11 +114,14 @@ export class EmailService {
     return buildEmailBody(vacancy, contactName);
   }
 
-  /** Anschreiben text + subject via LLM (if configured), falling back to the template. */
+  /**
+   * Builds the subject, the full Anschreiben (for the PDF) and the short inbox
+   * email body via LLM (if configured), falling back to the templates.
+   */
   private async buildAnschreibenContent(
     vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
     contactName?: string | null,
-  ): Promise<{ subject: string; text: string }> {
+  ): Promise<{ subject: string; anschreiben: string; emailBody: string }> {
     const llm = await generateAnschreiben({
       title: vacancy.title,
       company: vacancy.company,
@@ -130,10 +133,19 @@ export class EmailService {
 
     if (llm) {
       console.log(`Using LLM-generated Anschreiben for ${vacancy.company}.`);
-      return { subject: llm.subject, text: llm.body };
+      return {
+        subject: llm.subject,
+        anschreiben: llm.body,
+        emailBody: llm.emailBody || this.buildShortEmailBody(vacancy, contactName),
+      };
     }
 
-    return this.buildApplicationEmail(vacancy, contactName);
+    const template = this.buildApplicationEmail(vacancy, contactName);
+    return {
+      subject: template.subject,
+      anschreiben: template.text,
+      emailBody: this.buildShortEmailBody(vacancy, contactName),
+    };
   }
 
   async sendApplicationEmail(
@@ -146,14 +158,14 @@ export class EmailService {
     }
 
     const contactName = deriveContactNameFromEmail(to);
-    const { subject, text: anschreibenText } = await this.buildAnschreibenContent(
+    const { subject, anschreiben, emailBody } = await this.buildAnschreibenContent(
       vacancy,
       contactName,
     );
 
     console.log(`Generating Anschreiben PDF for ${vacancy.company} (${vacancy.type})...`);
     const pdfBuffer = await createAnschreibenPdf({
-      body: anschreibenText,
+      body: anschreiben,
       subject,
       senderName: env.applicantName,
       senderContactLines: [env.applicantEmail, env.applicantPhone].filter(Boolean),
@@ -165,7 +177,7 @@ export class EmailService {
     await this.sendEmail({
       to,
       subject,
-      text: this.buildShortEmailBody(vacancy, contactName),
+      text: emailBody,
       attachments: buildApplicationAttachments(pdfBuffer, resumePath),
     });
 
@@ -187,11 +199,11 @@ export class EmailService {
         'Wir suchen einen Junior Developer mit Node.js, TypeScript, React, Python, LLM und Testautomatisierung mit Playwright.',
     };
 
-    const { subject, text: anschreibenText } = await this.buildAnschreibenContent(testVacancy);
+    const { subject, anschreiben, emailBody } = await this.buildAnschreibenContent(testVacancy);
 
     console.log(`Generating test Anschreiben PDF (${testVacancy.type})...`);
     const pdfBuffer = await createAnschreibenPdf({
-      body: anschreibenText,
+      body: anschreiben,
       subject,
       senderName: env.applicantName,
       senderContactLines: [env.applicantEmail, env.applicantPhone].filter(Boolean),
@@ -207,7 +219,7 @@ export class EmailService {
     await this.sendEmail({
       to: env.testEmailTo,
       subject: `[TEST] ${subject}`,
-      text: this.buildShortEmailBody(testVacancy),
+      text: emailBody,
       attachments,
     });
   }

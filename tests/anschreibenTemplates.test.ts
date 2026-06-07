@@ -66,11 +66,11 @@ describe('buildAnschreiben', () => {
 });
 
 describe('buildEmailBody', () => {
-  it('mentions company and includes skill section', () => {
+  it('mentions company and references the attachments', () => {
     const body = buildEmailBody(juniorVacancy);
     assert.match(body, /Codewerk GmbH/);
-    assert.match(body, /Besonders relevant für Ihre Anforderungen:/);
-    assert.match(body, /Im Anhang:/);
+    assert.match(body, /Anschreiben/);
+    assert.match(body, /im Anhang/i);
   });
 
   it('uses praktikum-specific hook', () => {

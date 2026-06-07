@@ -283,23 +283,24 @@ export function buildEmailBody(
     contactName,
   };
 
-  const skillLines = pickSkillBullets(ctx.title, ctx.description, 3)
-    .map((bullet) => `• ${shortenBulletForEmail(bullet)}`)
-    .join('\n');
+  const topSkills = pickSkillBullets(ctx.title, ctx.description, 3)
+    .map((bullet) => shortenBulletForEmail(bullet))
+    .join(', ');
+
+  const skillSentence = topSkills
+    ? `Meine Schwerpunkte passen gut zu Ihren Anforderungen, u. a. ${topSkills}.`
+    : 'Mein Fullstack-Profil passt gut zu Ihren Anforderungen.';
 
   const paragraphs = [
     buildSalutation(ctx.contactName),
     '',
     buildEmailHook(ctx),
     '',
-    'Besonders relevant für Ihre Anforderungen:',
-    skillLines,
+    skillSentence,
     '',
-    'Ich arbeite mit modernen AI-assisted Workflows (Cursor IDE), um effizient und qualitätsbewusst zu entwickeln.',
+    `Die Details habe ich in Anschreiben und Lebenslauf zusammengefasst — Sie finden ${getEmailAttachmentList()} im Anhang.`,
     '',
-    `Im Anhang: ${getEmailAttachmentList()}.`,
-    '',
-    'Ich bin ab sofort verfügbar und freue mich auf Ihre Rückmeldung oder ein persönliches Gespräch.',
+    'Über eine Rückmeldung oder ein persönliches Gespräch würde ich mich sehr freuen.',
     '',
     'Mit freundlichen Grüßen',
     ctx.applicantName,

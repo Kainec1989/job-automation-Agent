@@ -211,6 +211,23 @@ const MIGRATIONS: Migration[] = [
       return true;
     },
   },
+  {
+    id: '008_cover_letter_email_body',
+    run(db) {
+      const columns = db
+        .prepare("PRAGMA table_info('cover_letter_cache')")
+        .all() as Array<{ name: string }>;
+
+      if (columns.some((column) => column.name === 'email_body')) {
+        return false;
+      }
+
+      console.log(`Running migration ${this.id}...`);
+      db.exec("ALTER TABLE cover_letter_cache ADD COLUMN email_body TEXT NOT NULL DEFAULT ''");
+      console.log(`Migration ${this.id} completed successfully.`);
+      return true;
+    },
+  },
 ];
 
 let db: Database.Database | null = null;

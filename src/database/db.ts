@@ -233,9 +233,21 @@ const MIGRATIONS: Migration[] = [
 let db: Database.Database | null = null;
 
 function runMigrations(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id          TEXT PRIMARY KEY,
+      applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  const recordApplied = database.prepare(
+    'INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)',
+  );
+
   for (const migration of MIGRATIONS) {
     try {
       migration.run(database);
+      recordApplied.run(migration.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Migration "${migration.id}" failed: ${message}`);
@@ -253,8 +265,11 @@ export function getDatabase(): Database.Database {
     db = new Database(env.databasePath);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
+    // Reclaim free pages over time; takes effect for DBs created/VACUUMed with it.
+    db.pragma('auto_vacuum = INCREMENTAL');
     db.exec(VACANCIES_TABLE_SQL);
     runMigrations(db);
+    db.pragma('incremental_vacuum');
     return db;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

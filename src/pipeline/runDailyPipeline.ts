@@ -3,6 +3,7 @@ import { env, getTavilyConfig, isTavilyConfigured } from '../config/env.js';
 import { runDispatchApplications } from '../dispatcher/runDailyApplicationPipeline.js';
 import { enrichVacanciesWithTavily } from '../enrichment/tavily/enrichDatabase.js';
 import { reclassifyVacancies } from '../tools/reclassifyVacancies.js';
+import { collectHealthWarnings } from './healthChecks.js';
 import { scrapeAndPersist } from '../scraper/runAllScrapers.js';
 import { sendPipelineNotification } from '../notifications/pipelineNotification.js';
 import { syncDatabaseToSheets } from '../sheets/syncDatabaseToSheets.js';
@@ -97,6 +98,7 @@ export async function runDailyPipeline(
     sheetsSynced: false,
     tavily: null,
     dispatch: null,
+    healthWarnings: [],
   };
 
   console.log('\n========== Daily pipeline started ==========\n');
@@ -185,6 +187,11 @@ export async function runDailyPipeline(
     }
   } else {
     console.log('--- Step 6/6: Dispatch (skipped) ---\n');
+  }
+
+  summary.healthWarnings = collectHealthWarnings(summary);
+  for (const warning of summary.healthWarnings) {
+    console.warn(`[Pipeline] Health warning: ${warning}`);
   }
 
   console.log('========== Daily pipeline finished ==========');

@@ -58,6 +58,7 @@ const mockSummary = {
     skippedBlocked: 0,
     approvalDeclined: false,
   },
+  healthWarnings: [],
 };
 
 async function main(): Promise<void> {

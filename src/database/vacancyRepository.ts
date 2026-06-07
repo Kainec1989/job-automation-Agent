@@ -165,12 +165,24 @@ export class VacancyRepository {
         .all(company, options.limit) as Array<Pick<Vacancy, 'id' | 'title' | 'company' | 'url'>>;
     }
 
+    // One representative row per company so each lookup covers a *distinct*
+    // company. Otherwise multi-posting companies (e.g. 27 listings) would eat
+    // the whole batch and only a couple of companies would ever be queried.
     return db
       .prepare(`
         SELECT id, title, company, url
-        FROM vacancies
+        FROM vacancies v
         WHERE status = 'new'
           AND (email IS NULL OR trim(email) = '')
+          AND id = (
+            SELECT v2.id
+            FROM vacancies v2
+            WHERE v2.status = 'new'
+              AND (v2.email IS NULL OR trim(v2.email) = '')
+              AND lower(trim(v2.company)) = lower(trim(v.company))
+            ORDER BY v2.created_at DESC, v2.id DESC
+            LIMIT 1
+          )
         ORDER BY
           CASE
             WHEN lower(company) LIKE '%gmbh%'

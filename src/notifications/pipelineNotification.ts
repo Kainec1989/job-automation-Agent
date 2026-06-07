@@ -188,11 +188,18 @@ export function formatPipelineSummary(summary: DailyPipelineSummary): string {
     }
   }
 
+  if (summary.healthWarnings.length > 0) {
+    lines.push('🩺 Проверки');
+    lines.push(...summary.healthWarnings.map((warning) => `  ⚠️ ${warning}`));
+    lines.push('');
+  }
+
   const hasErrors =
     (summary.dispatch?.failed ?? 0) > 0 ||
     (summary.dispatch?.markedFailed ?? 0) > 0 ||
     (summary.tavily?.failed ?? 0) > 0 ||
-    (summary.sheetsImport?.errors ?? 0) > 0;
+    (summary.sheetsImport?.errors ?? 0) > 0 ||
+    summary.healthWarnings.length > 0;
 
   lines.push(hasErrors ? '⚠️ Завершено с ошибками' : '✅ Завершено успешно');
 

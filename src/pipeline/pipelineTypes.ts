@@ -20,4 +20,5 @@ export interface DailyPipelineSummary {
   sheetsSynced: boolean;
   tavily: Awaited<ReturnType<typeof enrichVacanciesWithTavily>> | null;
   dispatch: Awaited<ReturnType<typeof runDispatchApplications>> | null;
+  healthWarnings: string[];
 }

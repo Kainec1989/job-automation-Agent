@@ -136,6 +136,10 @@ const TITLE_BLACKLIST_REGEXES = [
   /\bgame designer\b/i,
   /\betl\b/i,
   /\bbusiness analyst\b/i,
+  // Werkstudent / working student — не целевые роли (ищем Junior, не параллельное обучение)
+  /\bwerkstudent/i,
+  /\bworking student\b/i,
+  /\bstudentische hilfskraft\b/i,
 ] as const;
 
 const EXPERIENCE_BLACKLIST_REGEXES = [

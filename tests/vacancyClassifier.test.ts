@@ -34,6 +34,24 @@ describe('classifyVacancy', () => {
     assert.equal(result.statsKey, 'praktikum_no_it');
   });
 
+  it('rejects werkstudent and working student titles', () => {
+    const werkstudent = classifyVacancy(
+      'Werkstudent Softwareentwicklung (m/w/d)',
+      'TypeScript, React, Node.js',
+      'Mercedes-Benz AG',
+    );
+    assert.equal(werkstudent.isFit, false);
+    assert.equal(werkstudent.statsKey, 'title_blacklist');
+
+    const workingStudent = classifyVacancy(
+      'Working Student Frontend Engineer (m/f/d)',
+      'React, TypeScript',
+      'Raisin',
+    );
+    assert.equal(workingStudent.isFit, false);
+    assert.equal(workingStudent.statsKey, 'title_blacklist');
+  });
+
   it('classifies CHECK24-style junior fullstack as junior, not praktikum from description', () => {
     const result = classifyVacancy(
       'Junior Fullstack Developer',

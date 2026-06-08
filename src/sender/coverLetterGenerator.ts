@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getLlmConfig, isLlmConfigured, type LlmConfig } from '../config/env.js';
+import { sleep } from '../scraper/browser.js';
 import type { VacancyType } from '../database/types.js';
 import {
   coverLetterCacheKey,
@@ -141,6 +142,23 @@ async function callAnthropic(config: LlmConfig, prompt: string): Promise<string>
   return data.content?.[0]?.text ?? '';
 }
 
+const GEMINI_FALLBACK_MODEL = 'gemini-2.0-flash';
+
+function extractHttpStatus(message: string): number | null {
+  const match = message.match(/API error (\d+)/);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function isRetryableLlmError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const status = extractHttpStatus(message);
+  if (status === 429 || status === 503 || status === 502 || status === 500) {
+    return true;
+  }
+
+  return message.includes('UNAVAILABLE') || message.includes('high demand');
+}
+
 async function callGemini(config: LlmConfig, prompt: string): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     config.model,
@@ -171,6 +189,56 @@ async function callGemini(config: LlmConfig, prompt: string): Promise<string> {
   };
 
   return data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
+}
+
+async function callLlmProvider(config: LlmConfig, prompt: string): Promise<string> {
+  if (config.provider === 'gemini') {
+    return callGemini(config, prompt);
+  }
+
+  if (config.provider === 'anthropic') {
+    return callAnthropic(config, prompt);
+  }
+
+  return callOpenAi(config, prompt);
+}
+
+async function callLlmWithRetry(config: LlmConfig, prompt: string): Promise<string> {
+  const models =
+    config.provider === 'gemini' && config.model !== GEMINI_FALLBACK_MODEL
+      ? [config.model, GEMINI_FALLBACK_MODEL]
+      : [config.model];
+
+  let lastError: Error | null = null;
+
+  for (const model of models) {
+    const modelConfig = { ...config, model };
+
+    for (let attempt = 0; attempt < config.maxRetries; attempt++) {
+      try {
+        if (model !== config.model && attempt === 0) {
+          console.log(`[CoverLetter] Trying fallback model ${model}...`);
+        }
+
+        return await callLlmProvider(modelConfig, prompt);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        const canRetry = isRetryableLlmError(error) && attempt < config.maxRetries - 1;
+        if (!canRetry) {
+          break;
+        }
+
+        const delay = config.retryDelayMs * (attempt + 1);
+        console.warn(
+          `[CoverLetter] LLM ${model} attempt ${attempt + 1}/${config.maxRetries} failed — retry in ${delay}ms`,
+        );
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw lastError ?? new Error('LLM call failed');
 }
 
 function parseResponse(raw: string): CachedCoverLetter | null {
@@ -226,14 +294,7 @@ export async function generateAnschreiben(
 
   try {
     const prompt = buildPrompt(input);
-    let raw: string;
-    if (config.provider === 'gemini') {
-      raw = await callGemini(config, prompt);
-    } else if (config.provider === 'anthropic') {
-      raw = await callAnthropic(config, prompt);
-    } else {
-      raw = await callOpenAi(config, prompt);
-    }
+    const raw = await callLlmWithRetry(config, prompt);
 
     const result = parseResponse(raw);
     if (!result) {

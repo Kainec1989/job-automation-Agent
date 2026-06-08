@@ -389,6 +389,11 @@ export class VacancyRepository {
       return false;
     }
 
+    // Archived rows were deduped or manually closed — never resurrect from a stale sheet.
+    if (current === 'archived') {
+      return false;
+    }
+
     if (LOCKED_STATUSES.has(current) && incoming === 'new') {
       return false;
     }

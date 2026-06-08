@@ -15,9 +15,22 @@ const SUSPICIOUS_LOCAL_PARTS = [
   'placeholder',
   'email',
   'user',
+  'schwerbehindertenvertretung',
+  'behindertenvertretung',
+  'schwerbehinderung',
 ] as const;
 
-const GENERIC_LOCAL_PARTS = new Set(['info', 'kontakt', 'contact', 'hello', 'mail']);
+/** Generic mailboxes — never use for automated applications, even on a matching domain. */
+const GENERIC_LOCAL_PARTS = new Set([
+  'info',
+  'kontakt',
+  'contact',
+  'hello',
+  'mail',
+  'office',
+  'service',
+  'support',
+]);
 
 function normalizeEmail(raw: string): string | null {
   const email = raw.trim().toLowerCase();
@@ -40,6 +53,10 @@ export function isPlausibleHrEmail(email: string, company?: string | null): bool
     return false;
   }
 
+  if (GENERIC_LOCAL_PARTS.has(localPart) || localPart.startsWith('info.')) {
+    return false;
+  }
+
   if (!company?.trim()) {
     return true;
   }
@@ -54,10 +71,6 @@ export function isPlausibleHrEmail(email: string, company?: string | null): bool
 
   if (hasHrHint && domain.endsWith('.de')) {
     return true;
-  }
-
-  if (GENERIC_LOCAL_PARTS.has(localPart)) {
-    return false;
   }
 
   return false;

@@ -107,6 +107,8 @@ const tavilyExtractEnabled = optionalEnv('TAVILY_EXTRACT_ENABLED', 'true') !== '
 const tavilyMaxExtractUrls = Number(optionalEnv('TAVILY_MAX_EXTRACT_URLS', '3'));
 const tavilyNegativeCacheTtlDays = Number(optionalEnv('TAVILY_NEGATIVE_CACHE_TTL_DAYS', '14'));
 const tavilyMaxRetries = Number(optionalEnv('TAVILY_MAX_RETRIES', '2'));
+const llmMaxRetries = Number(optionalEnv('LLM_MAX_RETRIES', '3'));
+const llmRetryDelayMs = Number(optionalEnv('LLM_RETRY_DELAY_MS', '3000'));
 export const env = {
   databasePath: resolve(optionalEnv('DATABASE_PATH', './data/vacancies.db')),
 
@@ -183,6 +185,8 @@ export const env = {
   tavilyMaxExtractUrls,
   tavilyNegativeCacheTtlDays,
   tavilyMaxRetries,
+  llmMaxRetries,
+  llmRetryDelayMs,
 } as const;
 
 export interface TavilyConfig {
@@ -237,6 +241,8 @@ export interface LlmConfig {
   model: string;
   /** Optional override for OpenAI-compatible providers (e.g. Groq, OpenRouter). */
   baseUrl: string;
+  maxRetries: number;
+  retryDelayMs: number;
 }
 
 function parseLlmProvider(value: string): LlmProvider {
@@ -270,6 +276,8 @@ export function getLlmConfig(): LlmConfig {
     apiKey: process.env.LLM_API_KEY?.trim() ?? '',
     model: optionalEnv('LLM_MODEL', defaultModelForProvider(provider)),
     baseUrl: optionalEnv('LLM_BASE_URL', ''),
+    maxRetries: llmMaxRetries,
+    retryDelayMs: llmRetryDelayMs,
   };
 }
 

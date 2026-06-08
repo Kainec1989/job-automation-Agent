@@ -125,7 +125,7 @@ export async function syncSheetsToDatabase(): Promise<SheetsImportSummary> {
           console.log(`[Sheets Import] Status updated: id=${id} ${vacancy.status} → ${status}`);
         } else if (status !== vacancy.status) {
           console.warn(
-            `[Sheets Import] Skipped status downgrade for id=${id}: ${vacancy.status} → ${status}`,
+            `[Sheets Import] Skipped status change for id=${id}: ${vacancy.status} → ${status}`,
           );
         }
       }

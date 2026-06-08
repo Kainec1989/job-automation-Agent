@@ -25,6 +25,21 @@ describe('isPlausibleHrEmail', () => {
   it('rejects generic info@ without company domain match', () => {
     assert.equal(isPlausibleHrEmail('info@random-host.com', 'Totally Different GmbH'), false);
   });
+
+  it('rejects generic info@ even when domain matches company', () => {
+    assert.equal(isPlausibleHrEmail('info@hutter-unger.de', 'Hutter und Unger GmbH'), false);
+    assert.equal(isPlausibleHrEmail('info.de@endress.com', 'Endress+Hauser'), false);
+  });
+
+  it('rejects disability representative mailboxes', () => {
+    assert.equal(
+      isPlausibleHrEmail(
+        'schwerbehindertenvertretung@volkswagen-infotainment.com',
+        'Volkswagen Infotainment GmbH',
+      ),
+      false,
+    );
+  });
 });
 
 describe('pickBestHrEmail', () => {

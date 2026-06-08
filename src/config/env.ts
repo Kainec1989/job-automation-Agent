@@ -64,10 +64,10 @@ function buildLinkedInSearchUrl(
 }
 
 const keywordsJunior = parseKeywordList(
-  optionalEnv('KEYWORDS_JUNIOR', 'Junior, Developer, Testautomatisierer'),
+  optionalEnv('KEYWORDS_JUNIOR', 'Junior Developer, Testautomatisierung, QA Engineer'),
 );
 const keywordsPraktikum = parseKeywordList(
-  optionalEnv('KEYWORDS_PRAKTIKUM', 'Praktikum, Praktikant'),
+  optionalEnv('KEYWORDS_PRAKTIKUM', 'Praktikum Softwareentwicklung'),
 );
 const searchLocation = optionalEnv('SEARCH_LOCATION', 'Leipzig');
 const searchRadiusKm = Number(optionalEnv('SEARCH_RADIUS_KM', '150'));

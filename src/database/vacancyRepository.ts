@@ -264,7 +264,7 @@ export class VacancyRepository {
               AND status IN ('contacted', 'replied', 'rejected')
           )
           AND id = (
-            SELECT min(v2.id)
+            SELECT v2.id
             FROM vacancies v2
             WHERE lower(trim(v2.company)) = lower(trim(v.company))
               AND v2.status = 'new'
@@ -275,8 +275,15 @@ export class VacancyRepository {
                 v2.last_dispatch_at IS NULL
                 OR date(v2.last_dispatch_at) < date('now')
               )
+            ORDER BY
+              CASE WHEN v2.type = 'junior' THEN 0 ELSE 1 END,
+              v2.created_at ASC,
+              v2.id ASC
+            LIMIT 1
           )
-        ORDER BY created_at ASC
+        ORDER BY
+          CASE WHEN type = 'junior' THEN 0 ELSE 1 END,
+          created_at ASC
         LIMIT ?
       `)
       .all(maxRetries, maxRetries, limit) as PendingVacancy[];

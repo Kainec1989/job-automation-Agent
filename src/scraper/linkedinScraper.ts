@@ -1,7 +1,14 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { scrapePaginatedSearch, sleep, getContextOptions, recordSoftBlock } from './browser.js';
+import {
+  scrapePaginatedSearch,
+  sleep,
+  getContextOptions,
+  recordSoftBlock,
+  SoftBlockError,
+} from './browser.js';
+import { isSessionStale, probeAuthSession } from './sessionProbe.js';
 import { buildLinkedInPageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
@@ -118,6 +125,27 @@ async function scrapeAllLinkedInSearches(browser: Browser): Promise<ScrapedVacan
   const merged = new Map<string, ScrapedVacancy>();
   const searchUrls = env.linkedinSearchUrls;
   const contextOptions = getContextOptions(env.linkedinStorageState ?? undefined);
+  const sessionPath = env.linkedinStorageState;
+
+  if (sessionPath && searchUrls.length > 0) {
+    if (isSessionStale('linkedin', sessionPath)) {
+      console.warn(
+        `[LinkedIn] Session is older than 7 days — refresh recommended: npm run auth:linkedin`,
+      );
+    }
+
+    console.log('[LinkedIn] Probing saved session...');
+    const probeOk = await probeAuthSession(browser, 'linkedin', searchUrls[0], sessionPath);
+    if (!probeOk) {
+      console.warn(
+        '[LinkedIn] Session probe failed (captcha/login wall or 0 results). Skipping LinkedIn. Run: npm run auth:linkedin',
+      );
+      recordSoftBlock('linkedin.com', 'session probe failed (expired or captcha)');
+      return [];
+    }
+
+    console.log('[LinkedIn] Session probe OK.');
+  }
 
   for (let i = 0; i < searchUrls.length; i++) {
     if (i > 0 && env.searchDelayMs > 0) {
@@ -140,6 +168,11 @@ async function scrapeAllLinkedInSearches(browser: Browser): Promise<ScrapedVacan
       );
       mergeVacancies(merged, vacancies);
     } catch (error) {
+      if (error instanceof SoftBlockError) {
+        console.warn(`[LinkedIn] Soft block (${error.reason}) — skipping remaining searches.`);
+        break;
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[LinkedIn] Skipping search after error: ${message}`);
     }

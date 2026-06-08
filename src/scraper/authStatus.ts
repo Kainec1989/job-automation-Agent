@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { env } from '../config/env.js';
+import { isSessionStale, sessionAgeDays } from './sessionProbe.js';
 
 const AUTH_SITES = {
   linkedin: {
@@ -28,6 +29,8 @@ export interface AuthSessionInfo {
   exists: boolean;
   cookieCount: number | null;
   enabled: boolean;
+  ageDays: number | null;
+  stale: boolean;
 }
 
 function countCookies(filePath: string): number | null {
@@ -46,6 +49,8 @@ export function getAuthSessionInfos(): AuthSessionInfo[] {
     const path = configuredPath ?? resolve(site.defaultPath);
     const exists = existsSync(path);
 
+    const ageDays = exists ? sessionAgeDays(path) : null;
+
     return {
       scraper,
       label: site.label,
@@ -53,6 +58,8 @@ export function getAuthSessionInfos(): AuthSessionInfo[] {
       exists,
       cookieCount: exists ? countCookies(path) : null,
       enabled: env.enabledScrapers.includes(scraper),
+      ageDays,
+      stale: exists ? isSessionStale(scraper, path) : false,
     };
   });
 }
@@ -62,8 +69,10 @@ export function printAuthSessionStatus(): void {
 
   console.log('=== Browser auth sessions ===');
   for (const session of sessions) {
+    const ageLabel =
+      session.ageDays !== null ? `, ${session.ageDays.toFixed(1)}d old` : '';
     const status = session.exists
-      ? `OK (${session.cookieCount ?? '?'} cookies)`
+      ? `OK (${session.cookieCount ?? '?'} cookies${ageLabel}${session.stale ? ', stale' : ''})`
       : 'missing';
     const enabled = session.enabled ? 'enabled' : 'disabled';
     console.log(`  [${session.label}] ${status} — ${session.path} (${enabled})`);
@@ -89,6 +98,13 @@ export function printScraperAuthWarnings(): void {
     if (session.cookieCount === 0) {
       warnings.push(
         `[${session.label}] Session file has no cookies. Re-run: ${site.authCommand}`,
+      );
+      continue;
+    }
+
+    if (session.stale) {
+      warnings.push(
+        `[${session.label}] Session is ${session.ageDays?.toFixed(0)} days old (stale). Re-run: ${site.authCommand}`,
       );
     }
   }

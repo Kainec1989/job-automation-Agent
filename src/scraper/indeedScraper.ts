@@ -1,7 +1,14 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
-import { getContextOptions, recordSoftBlock, scrapePaginatedSearch, sleep } from './browser.js';
+import {
+  getContextOptions,
+  recordSoftBlock,
+  scrapePaginatedSearch,
+  sleep,
+  SoftBlockError,
+} from './browser.js';
+import { isSessionStale, probeAuthSession } from './sessionProbe.js';
 import { buildIndeedPageUrl } from './pagination.js';
 import { processScrapedJobCard } from './scraperUtils.js';
 import { mergeVacancies } from './mergeVacancies.js';
@@ -69,6 +76,25 @@ async function scrapeAllIndeedSearches(browser: Browser): Promise<ScrapedVacancy
   const merged = new Map<string, ScrapedVacancy>();
   const searchUrls = env.indeedSearchUrls;
   const contextOptions = getContextOptions(env.indeedStorageState ?? undefined);
+  const sessionPath = env.indeedStorageState;
+
+  if (sessionPath && searchUrls.length > 0) {
+    if (isSessionStale('indeed', sessionPath)) {
+      console.warn(`[Indeed] Session is older than 5 days — refresh recommended: npm run auth:indeed`);
+    }
+
+    console.log('[Indeed] Probing saved session...');
+    const probeOk = await probeAuthSession(browser, 'indeed', searchUrls[0], sessionPath);
+    if (!probeOk) {
+      console.warn(
+        '[Indeed] Session probe failed (403/captcha or 0 results). Skipping Indeed. Run: npm run auth:indeed',
+      );
+      recordSoftBlock('de.indeed.com', 'session probe failed (expired or blocked)');
+      return [];
+    }
+
+    console.log('[Indeed] Session probe OK.');
+  }
 
   for (let i = 0; i < searchUrls.length; i++) {
     if (i > 0 && env.searchDelayMs > 0) {
@@ -91,6 +117,11 @@ async function scrapeAllIndeedSearches(browser: Browser): Promise<ScrapedVacancy
       );
       mergeVacancies(merged, vacancies);
     } catch (error) {
+      if (error instanceof SoftBlockError) {
+        console.warn(`[Indeed] Soft block (${error.reason}) — skipping remaining searches.`);
+        break;
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[Indeed] Skipping search after error: ${message}`);
     }

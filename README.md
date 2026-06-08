@@ -203,7 +203,9 @@ npm run scrape
 ```
 
 - Recommended `SCRAPERS=stepstone,linkedin,arbeitsagentur` — Arbeitsagentur needs no browser/session
-- Add `indeed` once `auth:indeed` works (it often returns 403 headless)
+- Add `indeed` only after `npm run auth:indeed` — headless cron often gets HTTP 403
+- LinkedIn/Indeed sessions older than 7/5 days are flagged stale; refresh with `npm run auth:linkedin` / `auth:indeed`
+- Before a full LinkedIn run, a quick session probe skips the board when captcha/login wall is detected
 - Session files in `./data/` are auto-detected even without `.env` paths
 - If you get 403: set `BROWSER_HEADLESS=false` or increase `SEARCH_DELAY_MS`
 

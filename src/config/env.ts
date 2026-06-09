@@ -307,7 +307,48 @@ function toAttemptConfig(config: LlmConfig, label: string): LlmAttemptConfig {
   };
 }
 
-/** Ordered LLM attempts: primary → Gemini fallback model → optional secondary provider. */
+type FallbackEnvPrefix = 'LLM_FALLBACK' | 'LLM_FALLBACK2';
+
+function appendOpenAiCompatibleFallback(
+  chain: LlmAttemptConfig[],
+  primary: LlmConfig,
+  prefix: FallbackEnvPrefix,
+): void {
+  const providerRaw = optionalEnv(`${prefix}_PROVIDER`, '');
+  if (!providerRaw) {
+    return;
+  }
+
+  const provider = parseLlmProvider(providerRaw);
+  const apiKey =
+    process.env[`${prefix}_API_KEY`]?.trim() ||
+    (provider === primary.provider ? primary.apiKey : '');
+
+  if (!apiKey) {
+    return;
+  }
+
+  const model = optionalEnv(`${prefix}_MODEL`, defaultModelForProvider(provider));
+  const baseUrl = optionalEnv(
+    `${prefix}_BASE_URL`,
+    provider === 'openai' ? primary.baseUrl : '',
+  );
+
+  chain.push(
+    toAttemptConfig(
+      {
+        ...primary,
+        provider,
+        apiKey,
+        model,
+        baseUrl,
+      },
+      `${provider}/${model}`,
+    ),
+  );
+}
+
+/** Ordered LLM attempts: primary → Gemini fallback model → optional external fallbacks. */
 export function getLlmAttemptChain(): LlmAttemptConfig[] {
   const primary = getLlmConfig();
   if (!primary.enabled || !primary.apiKey) {
@@ -327,38 +368,8 @@ export function getLlmAttemptChain(): LlmAttemptConfig[] {
     );
   }
 
-  const fallbackProviderRaw = optionalEnv('LLM_FALLBACK_PROVIDER', '');
-  if (!fallbackProviderRaw) {
-    return chain;
-  }
-
-  const fallbackProvider = parseLlmProvider(fallbackProviderRaw);
-  const fallbackApiKey =
-    process.env.LLM_FALLBACK_API_KEY?.trim() ||
-    (fallbackProvider === primary.provider ? primary.apiKey : '');
-
-  if (!fallbackApiKey) {
-    return chain;
-  }
-
-  const fallbackModel = optionalEnv('LLM_FALLBACK_MODEL', defaultModelForProvider(fallbackProvider));
-  const fallbackBaseUrl = optionalEnv(
-    'LLM_FALLBACK_BASE_URL',
-    fallbackProvider === 'openai' ? primary.baseUrl : '',
-  );
-
-  chain.push(
-    toAttemptConfig(
-      {
-        ...primary,
-        provider: fallbackProvider,
-        apiKey: fallbackApiKey,
-        model: fallbackModel,
-        baseUrl: fallbackBaseUrl,
-      },
-      `${fallbackProvider}/${fallbackModel}`,
-    ),
-  );
+  appendOpenAiCompatibleFallback(chain, primary, 'LLM_FALLBACK');
+  appendOpenAiCompatibleFallback(chain, primary, 'LLM_FALLBACK2');
 
   return chain;
 }

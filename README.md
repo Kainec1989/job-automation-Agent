@@ -129,19 +129,23 @@ LLM_PROVIDER=gemini               # gemini (free) | openai | anthropic
 LLM_API_KEY=                      # Gemini key: https://aistudio.google.com/apikey
 LLM_MODEL=                        # empty = provider default (gemini-2.5-flash)
 LLM_BASE_URL=                     # OpenAI-compatible providers (Groq / OpenRouter)
-# Fallback when Gemini quota is exhausted (Groq, OpenRouter Hermes model, etc.)
+# Fallback #1 — Groq (key: console.groq.com/keys)
 LLM_FALLBACK_PROVIDER=openai
-LLM_FALLBACK_API_KEY=
+LLM_FALLBACK_API_KEY=gsk_...
 LLM_FALLBACK_BASE_URL=https://api.groq.com/openai/v1
 LLM_FALLBACK_MODEL=llama-3.3-70b-versatile
+# Fallback #2 — OpenRouter :free (key: openrouter.ai/keys)
+LLM_FALLBACK2_PROVIDER=openai
+LLM_FALLBACK2_API_KEY=sk-or-...
+LLM_FALLBACK2_BASE_URL=https://openrouter.ai/api/v1
+LLM_FALLBACK2_MODEL=meta-llama/llama-3.3-70b-instruct:free
 ```
 
 Recommended free source: **Google Gemini** (AI Studio) — 1,500 requests/day, no credit card.
-Set `LLM_PROVIDER=gemini` and paste a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-Fallback chain: `gemini-2.5-flash` → `gemini-2.0-flash` → `LLM_FALLBACK_*` → template.
+Set `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-2.5-flash`, key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+Fallback chain: `gemini-2.5-flash` → `gemini-2.0-flash` → Groq 70B → OpenRouter `:free` → template.
 
-Use an OpenAI-compatible **LLM model** (Groq, OpenRouter `nousresearch/hermes-*`) via `LLM_FALLBACK_*`.
-Do **not** run [Hermes Agent](https://github.com/NousResearch/hermes-agent) as a replacement for this pipeline — it is an autonomous Python agent, not a drop-in for cron + SQLite + SMTP.
+Add **Groq** and optionally **OpenRouter** keys to `LLM_FALLBACK_*` / `LLM_FALLBACK2_*` — both are OpenAI-compatible LLM APIs, not [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
 Every send attempt (sent / failed / skipped) is recorded in the `dispatch_events` table, and
 `scripts/run-daily-pipeline.sh` backs up the SQLite DB to `data/backups/` (keeps the newest 14).

@@ -13,7 +13,9 @@ const SUSPICIOUS = [
   'firstname', 'lastname', 'test', 'sample', 'placeholder', 'email', 'user',
   'schwerbehindertenvertretung', 'behindertenvertretung', 'schwerbehinderung',
 ];
-const GENERIC = new Set(['info', 'kontakt', 'contact', 'hello', 'mail', 'office', 'service', 'support']);
+const GENERIC = new Set([
+  'info', 'kontakt', 'contact', 'hello', 'mail', 'office', 'service', 'support', 'vertrieb', 'impressum',
+]);
 
 function companySlug(company) {
   return (company || '').toLowerCase().replace(/[^a-z0-9]/g, '');

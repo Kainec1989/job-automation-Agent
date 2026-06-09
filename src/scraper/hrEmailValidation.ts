@@ -30,6 +30,8 @@ const GENERIC_LOCAL_PARTS = new Set([
   'office',
   'service',
   'support',
+  'vertrieb',
+  'impressum',
 ]);
 
 function normalizeEmail(raw: string): string | null {

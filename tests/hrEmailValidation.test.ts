@@ -31,6 +31,11 @@ describe('isPlausibleHrEmail', () => {
     assert.equal(isPlausibleHrEmail('info.de@endress.com', 'Endress+Hauser'), false);
   });
 
+  it('rejects sales and impressum mailboxes even on matching domain', () => {
+    assert.equal(isPlausibleHrEmail('vertrieb@rola.com', 'rola Security Solutions GmbH'), false);
+    assert.equal(isPlausibleHrEmail('impressum@advancis.de', 'Advancis Software & Services GmbH'), false);
+  });
+
   it('rejects disability representative mailboxes', () => {
     assert.equal(
       isPlausibleHrEmail(

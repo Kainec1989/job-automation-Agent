@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
 import { scrapePaginatedSearch, sleep } from './browser.js';
 import { buildStepstonePageUrl } from './pagination.js';
-import { processScrapedJobCard } from './scraperUtils.js';
+import { processJobCardsWithConcurrency, type JobCardInput } from './processJobCards.js';
 import { mergeVacancies } from './mergeVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
 
@@ -16,8 +16,8 @@ function resolveStepstoneUrl(href: string): string {
 }
 
 export async function scrapeStepstonePage(page: Page, context: BrowserContext): Promise<ScrapedVacancy[]> {
-  const results: ScrapedVacancy[] = [];
   const seenUrls = new Set<string>();
+  const pending: JobCardInput[] = [];
 
   const jobCards = page.locator(
     'article[data-at="job-item"], article[data-testid="job-item"], li[data-testid="job-item"]',
@@ -26,7 +26,7 @@ export async function scrapeStepstonePage(page: Page, context: BrowserContext): 
   const count = await jobCards.count();
   if (count === 0) {
     console.warn('[Stepstone] No job cards found. Selectors may need updating or the page blocked the request.');
-    return results;
+    return [];
   }
 
   for (let i = 0; i < count; i++) {
@@ -63,16 +63,13 @@ export async function scrapeStepstonePage(page: Page, context: BrowserContext): 
       }
       seenUrls.add(url);
 
-      const vacancy = await processScrapedJobCard(context, title, company, url, description, 'Stepstone');
-      if (vacancy) {
-        results.push(vacancy);
-      }
+      pending.push({ title, company, url, snippet: description });
     } catch {
       continue;
     }
   }
 
-  return results;
+  return processJobCardsWithConcurrency(context, pending, 'Stepstone');
 }
 
 async function scrapeAllStepstoneSearches(browser: Browser): Promise<ScrapedVacancy[]> {

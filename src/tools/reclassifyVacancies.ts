@@ -14,7 +14,7 @@ export function reclassifyVacancies(): {
   skipped: number;
 } {
   const repository = new VacancyRepository();
-  const vacancies = repository.findAll();
+  const vacancies = repository.findByStatus('new');
 
   let archived = 0;
   let typeUpdated = 0;
@@ -24,11 +24,6 @@ export function reclassifyVacancies(): {
   let skipped = 0;
 
   for (const vacancy of vacancies) {
-    if (vacancy.status !== 'new') {
-      skipped += 1;
-      continue;
-    }
-
     const { title, company } = sanitizeJobFields(vacancy.title, vacancy.company);
     if (title !== vacancy.title || company !== vacancy.company) {
       repository.updateJobFields(vacancy.id, title, company);

@@ -1,5 +1,6 @@
 import type { runDispatchApplications } from '../dispatcher/runDailyApplicationPipeline.js';
 import type { enrichVacanciesWithTavily } from '../enrichment/tavily/enrichDatabase.js';
+import type { ScrapeSummary } from '../scraper/runAllScrapers.js';
 import type { SheetsImportSummary } from '../sheets/syncSheetsToDatabase.js';
 import type { reclassifyVacancies } from '../tools/reclassifyVacancies.js';
 
@@ -14,7 +15,7 @@ export interface DailyPipelineOptions {
 }
 
 export interface DailyPipelineSummary {
-  scraped: number | null;
+  scraped: ScrapeSummary | null;
   sheetsImport: SheetsImportSummary | null;
   reclassify: ReturnType<typeof reclassifyVacancies> | null;
   sheetsSynced: boolean;

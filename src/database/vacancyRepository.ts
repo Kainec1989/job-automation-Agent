@@ -233,6 +233,86 @@ export class VacancyRepository {
     return result.changes > 0;
   }
 
+  /** Propagate a found HR email to all new vacancies of the same company. */
+  updateEmailForCompany(company: string, email: string): number {
+    const db = getDatabase();
+    const trimmed = email.trim();
+
+    const result = db
+      .prepare(`
+        UPDATE vacancies
+        SET email = ?, updated_at = datetime('now')
+        WHERE status = 'new'
+          AND (email IS NULL OR trim(email) = '')
+          AND lower(trim(company)) = lower(trim(?))
+      `)
+      .run(trimmed, company);
+
+    return result.changes;
+  }
+
+  findByStatus(status: VacancyStatus): Vacancy[] {
+    const db = getDatabase();
+    const rows = db
+      .prepare('SELECT * FROM vacancies WHERE status = ? ORDER BY created_at DESC')
+      .all(status) as VacancyRow[];
+
+    return rows.map(mapRow);
+  }
+
+  upsertManyByUrl(inputs: CreateVacancyInput[]): { inserted: number; updated: number } {
+    if (inputs.length === 0) {
+      return { inserted: 0, updated: 0 };
+    }
+
+    const db = getDatabase();
+    const existsStmt = db.prepare('SELECT 1 AS ok FROM vacancies WHERE url = ? LIMIT 1');
+    const upsertStmt = db.prepare(`
+      INSERT INTO vacancies (title, company, url, email, description, type, status)
+      VALUES (@title, @company, @url, @email, @description, @type, @status)
+      ON CONFLICT(url) DO UPDATE SET
+        title = excluded.title,
+        company = excluded.company,
+        email = COALESCE(excluded.email, vacancies.email),
+        description = COALESCE(excluded.description, vacancies.description),
+        type = excluded.type,
+        status = CASE
+          WHEN vacancies.status IN ('contacted', 'replied', 'rejected', 'archived', 'failed')
+          THEN vacancies.status
+          ELSE excluded.status
+        END,
+        updated_at = datetime('now')
+    `);
+
+    const upsertAll = db.transaction((items: CreateVacancyInput[]) => {
+      let inserted = 0;
+      let updated = 0;
+
+      for (const input of items) {
+        const existed = existsStmt.get(input.url) !== undefined;
+        upsertStmt.run({
+          title: input.title,
+          company: input.company,
+          url: input.url,
+          email: input.email ?? null,
+          description: input.description ?? null,
+          type: input.type ?? 'junior',
+          status: input.status ?? 'new',
+        });
+
+        if (existed) {
+          updated += 1;
+        } else {
+          inserted += 1;
+        }
+      }
+
+      return { inserted, updated };
+    });
+
+    return upsertAll(inputs);
+  }
+
   findPendingWithEmail(limit: number, maxRetries: number): PendingVacancy[] {
     const db = getDatabase();
 

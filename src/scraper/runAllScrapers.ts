@@ -7,7 +7,11 @@ import { indeedScraper } from './indeedScraper.js';
 import { stepstoneScraper } from './stepstoneScraper.js';
 import { linkedinScraper } from './linkedinScraper.js';
 import { arbeitsagenturScraper } from './arbeitsagenturScraper.js';
-import { printClassificationStats, resetClassificationStats } from './classificationStats.js';
+import {
+  getScrapeSourceStats,
+  printClassificationStats,
+  resetClassificationStats,
+} from './classificationStats.js';
 import { dedupeByCompanyTitle, mergeVacancies } from './mergeVacancies.js';
 import { persistVacancies } from './persistVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
@@ -102,7 +106,12 @@ function logScraperSettings(): void {
   console.log(`Browser headless: ${env.browserHeadless}`);
 }
 
-export async function scrapeAndPersist(): Promise<number> {
+export interface ScrapeSummary {
+  total: number;
+  bySource: ReturnType<typeof getScrapeSourceStats>;
+}
+
+export async function scrapeAndPersist(): Promise<ScrapeSummary> {
   logScraperSettings();
   printScraperAuthWarnings();
   resetClassificationStats();
@@ -127,7 +136,10 @@ export async function scrapeAndPersist(): Promise<number> {
     console.log('No vacancies collected.');
   }
 
-  return vacancies.length;
+  return {
+    total: vacancies.length,
+    bySource: getScrapeSourceStats(),
+  };
 }
 
 async function main(): Promise<void> {

@@ -74,25 +74,45 @@ async function scrapeKeywordSet(
     }
 
     const collected: ScrapedVacancy[] = [];
-    for (const job of jobs) {
-      const title = (job.titel || job.beruf || '').trim();
-      const company = (job.arbeitgeber || '').trim();
-      const refnr = job.refnr?.trim();
+    const candidates = jobs
+      .map((job) => {
+        const title = (job.titel || job.beruf || '').trim();
+        const company = (job.arbeitgeber || '').trim();
+        const refnr = job.refnr?.trim();
+        if (!title || !company || !refnr) {
+          return null;
+        }
 
-      if (!title || !company || !refnr) {
-        continue;
-      }
+        return {
+          title,
+          company,
+          url: buildDetailUrl(refnr),
+          description: job.stellenbeschreibung ?? null,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
-      const vacancy = classifyScrapedVacancy(
-        title,
-        company,
-        buildDetailUrl(refnr),
-        job.stellenbeschreibung ?? null,
-        'Arbeitsagentur',
+    const concurrency = env.descriptionFetchConcurrency;
+    for (let offset = 0; offset < candidates.length; offset += concurrency) {
+      const batch = candidates.slice(offset, offset + concurrency);
+      const batchResults = await Promise.all(
+        batch.map((item) =>
+          Promise.resolve(
+            classifyScrapedVacancy(
+              item.title,
+              item.company,
+              item.url,
+              item.description,
+              'Arbeitsagentur',
+            ),
+          ),
+        ),
       );
 
-      if (vacancy) {
-        collected.push(vacancy);
+      for (const vacancy of batchResults) {
+        if (vacancy) {
+          collected.push(vacancy);
+        }
       }
     }
 

@@ -55,19 +55,19 @@ async function importSheetsStep(): Promise<SheetsImportSummary | null> {
   }
 }
 
-async function syncSheetsStep(label: string): Promise<boolean> {
+async function syncSheetsOnce(): Promise<boolean> {
   if (!env.googleSpreadsheetId) {
-    console.log(`[Pipeline] Skipping Sheets sync (${label}): GOOGLE_SPREADSHEET_ID not set.`);
+    console.log('[Pipeline] Skipping Sheets sync: GOOGLE_SPREADSHEET_ID not set.');
     return false;
   }
 
   try {
     await syncDatabaseToSheets();
-    console.log(`[Pipeline] Google Sheets synced (${label}).`);
+    console.log('[Pipeline] Google Sheets synced.');
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[Pipeline] Sheets sync failed (${label}): ${message}`);
+    console.warn(`[Pipeline] Sheets sync failed: ${message}`);
     return false;
   }
 }
@@ -101,11 +101,18 @@ export async function runDailyPipeline(
     healthWarnings: [],
   };
 
+  let sheetsDirty = false;
+
   console.log('\n========== Daily pipeline started ==========\n');
 
   if (!options.skipSheetsImport) {
     console.log('--- Step 1/6: Sheets import ---');
     summary.sheetsImport = await importSheetsStep();
+    if (summary.sheetsImport) {
+      if (summary.sheetsImport.emailsUpdated > 0 || summary.sheetsImport.statusesUpdated > 0) {
+        sheetsDirty = true;
+      }
+    }
     console.log();
   } else {
     console.log('--- Step 1/6: Sheets import (skipped) ---\n');
@@ -114,7 +121,10 @@ export async function runDailyPipeline(
   if (!options.skipScrape) {
     console.log('--- Step 2/6: Scrape ---');
     summary.scraped = await scrapeAndPersist();
-    console.log(`[Pipeline] Scraped ${summary.scraped} vacancy/vacancies.\n`);
+    if (summary.scraped.total > 0) {
+      sheetsDirty = true;
+    }
+    console.log(`[Pipeline] Scraped ${summary.scraped.total} vacancy/vacancies.\n`);
   } else {
     console.log('--- Step 2/6: Scrape (skipped) ---\n');
   }
@@ -122,6 +132,14 @@ export async function runDailyPipeline(
   if (!options.skipReclassify) {
     console.log('--- Step 3/6: Reclassify ---');
     summary.reclassify = reclassifyVacancies();
+    if (
+      summary.reclassify.archived > 0 ||
+      summary.reclassify.typeUpdated > 0 ||
+      summary.reclassify.fieldsCleaned > 0 ||
+      summary.reclassify.emailsCleared > 0
+    ) {
+      sheetsDirty = true;
+    }
     console.log(
       `[Pipeline] Reclassify: archived ${summary.reclassify.archived}, ` +
         `type updated ${summary.reclassify.typeUpdated}, ` +
@@ -131,16 +149,8 @@ export async function runDailyPipeline(
     console.log('--- Step 3/6: Reclassify (skipped) ---\n');
   }
 
-  if (!options.skipSheets) {
-    console.log('--- Step 4/6: Sheets sync ---');
-    summary.sheetsSynced = await syncSheetsStep('after reclassify');
-    console.log();
-  } else {
-    console.log('--- Step 4/6: Sheets sync (skipped) ---\n');
-  }
-
   if (shouldRunTavily(options.skipTavily)) {
-    console.log('--- Step 5/6: Tavily email enrichment ---');
+    console.log('--- Step 4/6: Tavily email enrichment ---');
     const tavilyConfig = getTavilyConfig();
     summary.tavily = await enrichVacanciesWithTavily({
       limit: tavilyConfig.maxLookups,
@@ -154,39 +164,45 @@ export async function runDailyPipeline(
         console.log(`[Tavily] ${label} → ${status}`);
       },
     });
+    if (summary.tavily.saved > 0) {
+      sheetsDirty = true;
+    }
     console.log(
       `[Pipeline] Tavily: processed ${summary.tavily.processed}, ` +
         `saved ${summary.tavily.saved}, not found ${summary.tavily.notFound}` +
         `${summary.tavily.cacheHits > 0 ? `, cache hits ${summary.tavily.cacheHits}` : ''}.\n`,
     );
-
-    if (!options.skipSheets && summary.tavily.saved > 0) {
-      summary.sheetsSynced = (await syncSheetsStep('after tavily')) || summary.sheetsSynced;
-      console.log();
-    }
   } else {
     const reason = options.skipTavily
       ? 'skipped by flag'
       : !isTavilyConfigured()
         ? 'TAVILY_API_KEY not set'
         : 'TAVILY_ENABLED=false';
-    console.log(`--- Step 5/6: Tavily (skipped: ${reason}) ---\n`);
+    console.log(`--- Step 4/6: Tavily (skipped: ${reason}) ---\n`);
   }
 
   if (!options.skipDispatch) {
-    console.log('--- Step 6/6: Dispatch ---');
-    summary.dispatch = await runDispatchApplications();
+    console.log('--- Step 5/6: Dispatch ---');
+    summary.dispatch = await runDispatchApplications({ syncSheets: false });
+    if (summary.dispatch.sent > 0 || summary.dispatch.markedFailed > 0) {
+      sheetsDirty = true;
+    }
     console.log(
       `[Pipeline] Dispatch: sent ${summary.dispatch.sent}, failed ${summary.dispatch.failed}, ` +
         `marked failed ${summary.dispatch.markedFailed}.\n`,
     );
-
-    if (!options.skipSheets && summary.dispatch.sent + summary.dispatch.markedFailed > 0) {
-      summary.sheetsSynced = (await syncSheetsStep('after dispatch')) || summary.sheetsSynced;
-      console.log();
-    }
   } else {
-    console.log('--- Step 6/6: Dispatch (skipped) ---\n');
+    console.log('--- Step 5/6: Dispatch (skipped) ---\n');
+  }
+
+  if (!options.skipSheets && sheetsDirty) {
+    console.log('--- Step 6/6: Sheets sync ---');
+    summary.sheetsSynced = await syncSheetsOnce();
+    console.log();
+  } else if (!options.skipSheets) {
+    console.log('--- Step 6/6: Sheets sync (no DB changes) ---\n');
+  } else {
+    console.log('--- Step 6/6: Sheets sync (skipped) ---\n');
   }
 
   summary.healthWarnings = collectHealthWarnings(summary);
@@ -211,7 +227,7 @@ async function main(): Promise<void> {
       );
     }
     if (summary.scraped !== null) {
-      console.log(`Scraped: ${summary.scraped}`);
+      console.log(`Scraped: ${summary.scraped.total}`);
     }
     if (summary.reclassify) {
       console.log(

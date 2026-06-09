@@ -40,6 +40,24 @@ export function recordClassification(source: string, result: ClassificationResul
   increment(result.statsKey, source);
 }
 
+export function getScrapeSourceStats(): Array<{
+  source: string;
+  accepted: number;
+  rejected: number;
+}> {
+  return [...bySource.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([source, sourceMap]) => {
+      const accepted =
+        (sourceMap.get('accepted_junior') ?? 0) + (sourceMap.get('accepted_praktikum') ?? 0);
+      const rejected = [...sourceMap.entries()]
+        .filter(([key]) => !key.startsWith('accepted_'))
+        .reduce((sum, [, count]) => sum + count, 0);
+
+      return { source, accepted, rejected };
+    });
+}
+
 export function printClassificationStats(): void {
   const acceptedJunior = totals.get('accepted_junior') ?? 0;
   const acceptedPraktikum = totals.get('accepted_praktikum') ?? 0;

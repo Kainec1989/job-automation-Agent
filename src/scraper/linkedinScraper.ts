@@ -10,7 +10,7 @@ import {
 } from './browser.js';
 import { isSessionStale, probeAuthSession } from './sessionProbe.js';
 import { buildLinkedInPageUrl } from './pagination.js';
-import { processScrapedJobCard } from './scraperUtils.js';
+import { processJobCardsWithConcurrency, type JobCardInput } from './processJobCards.js';
 import { mergeVacancies } from './mergeVacancies.js';
 import type { JobBoardScraper } from './scraperTypes.js';
 
@@ -44,8 +44,8 @@ async function dismissLinkedInModals(page: Page): Promise<void> {
 }
 
 export async function scrapeLinkedInPage(page: Page, context: BrowserContext): Promise<ScrapedVacancy[]> {
-  const results: ScrapedVacancy[] = [];
   const seenUrls = new Set<string>();
+  const pending: JobCardInput[] = [];
 
   await dismissLinkedInModals(page);
 
@@ -64,7 +64,7 @@ export async function scrapeLinkedInPage(page: Page, context: BrowserContext): P
   const count = await jobCards.count();
   if (count === 0) {
     console.warn('[LinkedIn] No job cards found. Login may be required — run: npm run auth:linkedin');
-    return results;
+    return [];
   }
 
   console.log(`[LinkedIn] Found ${count} job cards on page`);
@@ -109,16 +109,13 @@ export async function scrapeLinkedInPage(page: Page, context: BrowserContext): P
       }
       seenUrls.add(url);
 
-      const vacancy = await processScrapedJobCard(context, title, company, url, description, 'LinkedIn');
-      if (vacancy) {
-        results.push(vacancy);
-      }
+      pending.push({ title, company, url, snippet: description });
     } catch {
       continue;
     }
   }
 
-  return results;
+  return processJobCardsWithConcurrency(context, pending, 'LinkedIn');
 }
 
 async function scrapeAllLinkedInSearches(browser: Browser): Promise<ScrapedVacancy[]> {

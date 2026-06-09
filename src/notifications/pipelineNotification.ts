@@ -69,7 +69,12 @@ export function formatPipelineSummary(summary: DailyPipelineSummary): string {
 
   if (summary.scraped !== null) {
     lines.push('🔍 Скрапинг');
-    lines.push(`  Новых вакансий: ${summary.scraped}`);
+    lines.push(`  Новых вакансий: ${summary.scraped.total}`);
+    if (summary.scraped.bySource.length > 0) {
+      for (const source of summary.scraped.bySource) {
+        lines.push(`  ${source.source}: принято ${source.accepted}, отклонено ${source.rejected}`);
+      }
+    }
     lines.push('');
   }
 
@@ -98,10 +103,14 @@ export function formatPipelineSummary(summary: DailyPipelineSummary): string {
   }
 
   if (summary.tavily) {
-    const { saved, notFound, failed, cacheHits, savedEmails } = summary.tavily;
+    const { saved, notFound, failed, cacheHits, processed, savedEmails } = summary.tavily;
     if (saved > 0 || notFound > 0 || failed > 0) {
       lines.push('🔎 Tavily (поиск email)');
       lines.push(`  Сохранено в БД: ${saved}`);
+      if (processed > 0) {
+        const hitRate = Math.round((cacheHits / processed) * 100);
+        lines.push(`  Cache hit rate: ${hitRate}% (${cacheHits}/${processed})`);
+      }
       if (cacheHits > 0) {
         lines.push(`  Из кэша: ${cacheHits}`);
       }
@@ -142,8 +151,15 @@ export function formatPipelineSummary(summary: DailyPipelineSummary): string {
     ) {
       lines.push('✉️ Отправка заявок');
 
+      const { llmCoverLetters, templateCoverLetters } = summary.dispatch;
+
       if (sent > 0) {
         lines.push(`  Отправлено: ${sent}`);
+        if (llmCoverLetters > 0 || templateCoverLetters > 0) {
+          lines.push(
+            `  Anschreiben: LLM ${llmCoverLetters}, шаблон ${templateCoverLetters}`,
+          );
+        }
         appendLimitedList(
           lines,
           '',

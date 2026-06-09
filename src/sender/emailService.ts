@@ -121,7 +121,7 @@ export class EmailService {
   private async buildAnschreibenContent(
     vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
     contactName?: string | null,
-  ): Promise<{ subject: string; anschreiben: string; emailBody: string }> {
+  ): Promise<{ subject: string; anschreiben: string; emailBody: string; coverLetterSource: 'llm' | 'template' }> {
     const llm = await generateAnschreiben({
       title: vacancy.title,
       company: vacancy.company,
@@ -137,6 +137,7 @@ export class EmailService {
         subject: llm.subject,
         anschreiben: llm.body,
         emailBody: llm.emailBody || this.buildShortEmailBody(vacancy, contactName),
+        coverLetterSource: 'llm',
       };
     }
 
@@ -145,6 +146,7 @@ export class EmailService {
       subject: template.subject,
       anschreiben: template.text,
       emailBody: this.buildShortEmailBody(vacancy, contactName),
+      coverLetterSource: 'template',
     };
   }
 
@@ -152,13 +154,13 @@ export class EmailService {
     vacancy: Pick<Vacancy, 'title' | 'company' | 'type' | 'description'>,
     to: string,
     resumePath: string = env.resumePath,
-  ): Promise<void> {
+  ): Promise<'llm' | 'template'> {
     if (!to.trim()) {
       throw new Error('Recipient email address is required');
     }
 
     const contactName = deriveContactNameFromEmail(to);
-    const { subject, anschreiben, emailBody } = await this.buildAnschreibenContent(
+    const { subject, anschreiben, emailBody, coverLetterSource } = await this.buildAnschreibenContent(
       vacancy,
       contactName,
     );
@@ -182,6 +184,7 @@ export class EmailService {
     });
 
     console.log(`Application email successfully sent to ${vacancy.company}`);
+    return coverLetterSource;
   }
 
   async sendTestEmail(): Promise<void> {

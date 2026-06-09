@@ -97,6 +97,7 @@ const chromePath = process.env.CHROME_PATH?.trim()
 const browserHeadless = optionalEnv('BROWSER_HEADLESS', 'true') !== 'false';
 const fetchFullDescription = optionalEnv('FETCH_FULL_DESCRIPTION', 'true') !== 'false';
 const descriptionFetchDelayMs = Number(optionalEnv('DESCRIPTION_FETCH_DELAY_MS', '3000'));
+const descriptionFetchConcurrency = Number(optionalEnv('DESCRIPTION_FETCH_CONCURRENCY', '4'));
 const extractEmail = optionalEnv('EXTRACT_EMAIL', 'true') !== 'false';
 const scrapeMaxPages = Number(optionalEnv('SCRAPE_MAX_PAGES', '3'));
 const scrapePageDelayMs = Number(optionalEnv('SCRAPE_PAGE_DELAY_MS', '5000'));
@@ -125,6 +126,7 @@ export const env = {
   browserHeadless,
   fetchFullDescription,
   descriptionFetchDelayMs,
+  descriptionFetchConcurrency,
   extractEmail,
   scrapeMaxPages,
   scrapePageDelayMs,
@@ -245,6 +247,16 @@ export interface LlmConfig {
   retryDelayMs: number;
 }
 
+export interface LlmAttemptConfig {
+  label: string;
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
+  baseUrl: string;
+  maxRetries: number;
+  retryDelayMs: number;
+}
+
 function parseLlmProvider(value: string): LlmProvider {
   if (value === 'anthropic' || value === 'gemini') {
     return value;
@@ -279,6 +291,76 @@ export function getLlmConfig(): LlmConfig {
     maxRetries: llmMaxRetries,
     retryDelayMs: llmRetryDelayMs,
   };
+}
+
+const GEMINI_FALLBACK_MODEL = 'gemini-2.0-flash';
+
+function toAttemptConfig(config: LlmConfig, label: string): LlmAttemptConfig {
+  return {
+    label,
+    provider: config.provider,
+    apiKey: config.apiKey,
+    model: config.model,
+    baseUrl: config.baseUrl,
+    maxRetries: config.maxRetries,
+    retryDelayMs: config.retryDelayMs,
+  };
+}
+
+/** Ordered LLM attempts: primary → Gemini fallback model → optional secondary provider. */
+export function getLlmAttemptChain(): LlmAttemptConfig[] {
+  const primary = getLlmConfig();
+  if (!primary.enabled || !primary.apiKey) {
+    return [];
+  }
+
+  const chain: LlmAttemptConfig[] = [
+    toAttemptConfig(primary, `${primary.provider}/${primary.model}`),
+  ];
+
+  if (primary.provider === 'gemini' && primary.model !== GEMINI_FALLBACK_MODEL) {
+    chain.push(
+      toAttemptConfig(
+        { ...primary, model: GEMINI_FALLBACK_MODEL },
+        `${primary.provider}/${GEMINI_FALLBACK_MODEL}`,
+      ),
+    );
+  }
+
+  const fallbackProviderRaw = optionalEnv('LLM_FALLBACK_PROVIDER', '');
+  if (!fallbackProviderRaw) {
+    return chain;
+  }
+
+  const fallbackProvider = parseLlmProvider(fallbackProviderRaw);
+  const fallbackApiKey =
+    process.env.LLM_FALLBACK_API_KEY?.trim() ||
+    (fallbackProvider === primary.provider ? primary.apiKey : '');
+
+  if (!fallbackApiKey) {
+    return chain;
+  }
+
+  const fallbackModel = optionalEnv('LLM_FALLBACK_MODEL', defaultModelForProvider(fallbackProvider));
+  const fallbackBaseUrl = optionalEnv(
+    'LLM_FALLBACK_BASE_URL',
+    fallbackProvider === 'openai' ? primary.baseUrl : '',
+  );
+
+  chain.push(
+    toAttemptConfig(
+      {
+        ...primary,
+        provider: fallbackProvider,
+        apiKey: fallbackApiKey,
+        model: fallbackModel,
+        baseUrl: fallbackBaseUrl,
+      },
+      `${fallbackProvider}/${fallbackModel}`,
+    ),
+  );
+
+  return chain;
 }
 
 export interface SmtpConfig {

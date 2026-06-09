@@ -51,6 +51,8 @@ npm run dispatch
 | Command | Description |
 |---------|-------------|
 | `npm run scrape` | Run all enabled scrapers, classify, save to DB |
+| `npm run db:init` | Initialize SQLite schema |
+| `npm run db:cleanup` | Dedup contacted rows, clear bad emails, VACUUM |
 | `npm run db:reclassify` | Re-run classifier on `status=new` vacancies; archive misfits |
 | `npm run dispatch` | Send applications to vacancies with `status=new` and email |
 | `npm run sheets:sync` | Push DB contents to Google Sheets |
@@ -75,10 +77,10 @@ Steps (in order):
 
 1. **Sheets import** — pull manual emails/status from Google Sheets
 2. **Scrape** — job boards → classify → SQLite
-3. **Reclassify** — archive misfits, clean titles
-4. **Sheets sync** — export DB (if `GOOGLE_SPREADSHEET_ID` set)
-5. **Tavily enrich** — find HR emails (if `TAVILY_ENABLED=true` + API key)
-6. **Dispatch** — send applications (`DISPATCH_LIMIT` per run); retries next day, `failed` after `DISPATCH_MAX_RETRIES`
+3. **Reclassify** — archive misfits, clean titles (`status=new` only)
+4. **Tavily enrich** — find HR emails (if `TAVILY_ENABLED=true` + API key); propagates email to all `new` rows per company
+5. **Dispatch** — send applications (`DISPATCH_LIMIT` per run); retries next day, `failed` after `DISPATCH_MAX_RETRIES`
+6. **Sheets sync** — single export at the end (only when the DB changed)
 
 Skip individual steps:
 
@@ -127,12 +129,19 @@ LLM_PROVIDER=gemini               # gemini (free) | openai | anthropic
 LLM_API_KEY=                      # Gemini key: https://aistudio.google.com/apikey
 LLM_MODEL=                        # empty = provider default (gemini-2.5-flash)
 LLM_BASE_URL=                     # OpenAI-compatible providers (Groq / OpenRouter)
+# Fallback when Gemini quota is exhausted (Groq, OpenRouter Hermes model, etc.)
+LLM_FALLBACK_PROVIDER=openai
+LLM_FALLBACK_API_KEY=
+LLM_FALLBACK_BASE_URL=https://api.groq.com/openai/v1
+LLM_FALLBACK_MODEL=llama-3.3-70b-versatile
 ```
 
 Recommended free source: **Google Gemini** (AI Studio) — 1,500 requests/day, no credit card.
 Set `LLM_PROVIDER=gemini` and paste a key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-For OpenAI-compatible free providers, set `LLM_PROVIDER=openai` plus `LLM_BASE_URL` (e.g. Groq:
-`https://api.groq.com/openai/v1` with `LLM_MODEL=llama-3.3-70b-versatile`).
+Fallback chain: `gemini-2.5-flash` → `gemini-2.0-flash` → `LLM_FALLBACK_*` → template.
+
+Use an OpenAI-compatible **LLM model** (Groq, OpenRouter `nousresearch/hermes-*`) via `LLM_FALLBACK_*`.
+Do **not** run [Hermes Agent](https://github.com/NousResearch/hermes-agent) as a replacement for this pipeline — it is an autonomous Python agent, not a drop-in for cron + SQLite + SMTP.
 
 Every send attempt (sent / failed / skipped) is recorded in the `dispatch_events` table, and
 `scripts/run-daily-pipeline.sh` backs up the SQLite DB to `data/backups/` (keeps the newest 14).
@@ -173,7 +182,7 @@ npm run tavily:enrich -- --limit 3
 npm run tavily:enrich -- --limit 5 --dry-run
 ```
 
-Enrichment looks up **one representative vacancy per company**, so a daily batch of `TAVILY_MAX_LOOKUPS` covers that many distinct companies instead of being eaten by a single company with many postings.
+Enrichment looks up **one representative vacancy per company** (saves API credits), then **propagates the found email** to all other `new` rows of that company.
 
 Settings: `TAVILY_SEARCH_DEPTH` (`basic` = 1 credit), `TAVILY_MAX_RESULTS`, `TAVILY_MAX_LOOKUPS`, `TAVILY_MAX_QUERIES_PER_LOOKUP`, `TAVILY_EXTRACT_ENABLED` (fetch impressum/karriere pages when search snippets lack email), `TAVILY_MAX_EXTRACT_URLS`, `TAVILY_NEGATIVE_CACHE_TTL_DAYS` (re-try not-found companies after N days), `TAVILY_MAX_RETRIES`.
 
@@ -196,7 +205,7 @@ src/
 Indeed and LinkedIn often block headless browsers. Recommended setup:
 
 ```bash
-npm run auth:linkedin   # log in once, saves ./data/linkedin-auth.json
+BROWSER_HEADLESS=false npm run auth:linkedin   # visible browser — log in, saves ./data/linkedin-auth.json
 npm run auth:indeed     # optional — accept cookies on Indeed
 npm run auth:status     # verify session files
 npm run scrape
@@ -204,7 +213,10 @@ npm run scrape
 
 - Recommended `SCRAPERS=stepstone,linkedin,arbeitsagentur` — Arbeitsagentur needs no browser/session
 - Add `indeed` only after `npm run auth:indeed` — headless cron often gets HTTP 403
+- **LinkedIn session checklist:** refresh every 2–4 weeks (or when `auth:status` / session probe fails):
+  `BROWSER_HEADLESS=false npm run auth:linkedin`
 - LinkedIn/Indeed sessions older than 7/5 days are flagged stale; refresh with `npm run auth:linkedin` / `auth:indeed`
+- `DESCRIPTION_FETCH_CONCURRENCY=4` — parallel detail-page fetches (Stepstone/LinkedIn)
 - Before a full LinkedIn run, a quick session probe skips the board when captcha/login wall is detected
 - Session files in `./data/` are auto-detected even without `.env` paths
 - If you get 403: set `BROWSER_HEADLESS=false` or increase `SEARCH_DELAY_MS`
@@ -218,6 +230,7 @@ See [`.env.example`](.env.example). Important variables:
 - `KEYWORDS_JUNIOR` / `KEYWORDS_PRAKTIKUM` — comma-separated; **each entry is searched as its own query**, so use complete role phrases (e.g. `Junior Developer`), not single broad words like `Junior`
 - `SEARCH_LOCATION` / `SEARCH_RADIUS_KM` — default: Leipzig, 150 km
 - `FETCH_FULL_DESCRIPTION` — load full job text before classification
+- `DESCRIPTION_FETCH_CONCURRENCY` — parallel detail fetches (default: 4)
 - `EXTRACT_EMAIL` — parse HR emails from job pages into DB (default: on)
 - `SCRAPE_MAX_PAGES` — pages per search URL (default: 3)
 - `SCRAPE_PAGE_DELAY_MS` — delay between pages (default: 5000)

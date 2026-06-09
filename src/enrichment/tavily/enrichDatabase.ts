@@ -100,9 +100,10 @@ export async function enrichVacanciesWithTavily(
         result.email && isPlausibleHrEmail(result.email, vacancy.company) ? result.email : null;
 
       if (email) {
-        saved = repository.updateEmailIfNew(vacancy.id, email);
+        const propagated = repository.updateEmailForCompany(vacancy.company, email);
+        saved = propagated > 0;
         if (saved) {
-          summary.saved += 1;
+          summary.saved += propagated;
           summary.savedEmails.push({
             company: vacancy.company,
             title: vacancy.title,

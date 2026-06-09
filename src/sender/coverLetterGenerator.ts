@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { getLlmConfig, isLlmConfigured, type LlmConfig } from '../config/env.js';
+import {
+  getLlmAttemptChain,
+  isLlmConfigured,
+  type LlmAttemptConfig,
+  type LlmConfig,
+} from '../config/env.js';
 import { sleep } from '../scraper/browser.js';
 import type { VacancyType } from '../database/types.js';
 import {
@@ -142,8 +147,6 @@ async function callAnthropic(config: LlmConfig, prompt: string): Promise<string>
   return data.content?.[0]?.text ?? '';
 }
 
-const GEMINI_FALLBACK_MODEL = 'gemini-2.0-flash';
-
 function extractHttpStatus(message: string): number | null {
   const match = message.match(/API error (\d+)/);
   return match ? Number.parseInt(match[1], 10) : null;
@@ -203,35 +206,39 @@ async function callLlmProvider(config: LlmConfig, prompt: string): Promise<strin
   return callOpenAi(config, prompt);
 }
 
-async function callLlmWithRetry(config: LlmConfig, prompt: string): Promise<string> {
-  const models =
-    config.provider === 'gemini' && config.model !== GEMINI_FALLBACK_MODEL
-      ? [config.model, GEMINI_FALLBACK_MODEL]
-      : [config.model];
-
+async function callLlmWithRetry(attempts: LlmAttemptConfig[], prompt: string): Promise<string> {
   let lastError: Error | null = null;
 
-  for (const model of models) {
-    const modelConfig = { ...config, model };
+  for (let index = 0; index < attempts.length; index++) {
+    const attempt = attempts[index];
+    const modelConfig: LlmConfig = {
+      enabled: true,
+      provider: attempt.provider,
+      apiKey: attempt.apiKey,
+      model: attempt.model,
+      baseUrl: attempt.baseUrl,
+      maxRetries: attempt.maxRetries,
+      retryDelayMs: attempt.retryDelayMs,
+    };
 
-    for (let attempt = 0; attempt < config.maxRetries; attempt++) {
+    for (let retry = 0; retry < attempt.maxRetries; retry++) {
       try {
-        if (model !== config.model && attempt === 0) {
-          console.log(`[CoverLetter] Trying fallback model ${model}...`);
+        if (index > 0 && retry === 0) {
+          console.log(`[CoverLetter] Trying fallback ${attempt.label}...`);
         }
 
         return await callLlmProvider(modelConfig, prompt);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        const canRetry = isRetryableLlmError(error) && attempt < config.maxRetries - 1;
+        const canRetry = isRetryableLlmError(error) && retry < attempt.maxRetries - 1;
         if (!canRetry) {
           break;
         }
 
-        const delay = config.retryDelayMs * (attempt + 1);
+        const delay = attempt.retryDelayMs * (retry + 1);
         console.warn(
-          `[CoverLetter] LLM ${model} attempt ${attempt + 1}/${config.maxRetries} failed — retry in ${delay}ms`,
+          `[CoverLetter] LLM ${attempt.label} attempt ${retry + 1}/${attempt.maxRetries} failed — retry in ${delay}ms`,
         );
         await sleep(delay);
       }
@@ -290,11 +297,14 @@ export async function generateAnschreiben(
     return cached;
   }
 
-  const config = getLlmConfig();
+  const attempts = getLlmAttemptChain();
+  if (attempts.length === 0) {
+    return null;
+  }
 
   try {
     const prompt = buildPrompt(input);
-    const raw = await callLlmWithRetry(config, prompt);
+    const raw = await callLlmWithRetry(attempts, prompt);
 
     const result = parseResponse(raw);
     if (!result) {

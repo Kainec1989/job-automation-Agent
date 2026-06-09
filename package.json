@@ -11,6 +11,7 @@
     "dispatch": "tsx src/dispatcher/runDailyApplicationPipeline.ts",
     "pipeline:daily": "tsx src/pipeline/runDailyPipeline.ts",
     "db:init": "tsx src/database/init.ts",
+    "db:cleanup": "node scripts/cleanup-database.cjs",
     "db:reclassify": "tsx src/tools/reclassifyVacancies.ts",
     "sheets:sync": "tsx src/sheets/syncDatabaseToSheets.ts",
     "sheets:import": "tsx src/sheets/syncSheetsToDatabase.ts",

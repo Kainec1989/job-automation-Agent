@@ -30,11 +30,20 @@ export interface DispatchSummary {
   skippedInvalidEmail: number;
   skippedBlocked: number;
   approvalDeclined: boolean;
+  llmCoverLetters: number;
+  templateCoverLetters: number;
   sentApplications: DispatchedApplication[];
   failures: DispatchFailure[];
 }
 
-export async function runDispatchApplications(): Promise<DispatchSummary> {
+export interface DispatchOptions {
+  /** When false, caller is responsible for syncing Google Sheets (e.g. daily pipeline). */
+  syncSheets?: boolean;
+}
+
+export async function runDispatchApplications(
+  options: DispatchOptions = {},
+): Promise<DispatchSummary> {
   const repository = new VacancyRepository();
   let sent = 0;
   let failed = 0;
@@ -42,6 +51,8 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
   let skippedInvalidEmail = 0;
   let skippedBlocked = 0;
   let approvalDeclined = false;
+  let llmCoverLetters = 0;
+  let templateCoverLetters = 0;
   const sentApplications: DispatchedApplication[] = [];
   const failures: DispatchFailure[] = [];
 
@@ -52,6 +63,8 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
     skippedInvalidEmail,
     skippedBlocked,
     approvalDeclined,
+    llmCoverLetters,
+    templateCoverLetters,
     sentApplications,
     failures,
   });
@@ -153,7 +166,12 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
     }
 
     try {
-      await emailService.sendApplicationEmail(job, job.email);
+      const coverLetterSource = await emailService.sendApplicationEmail(job, job.email);
+      if (coverLetterSource === 'llm') {
+        llmCoverLetters += 1;
+      } else {
+        templateCoverLetters += 1;
+      }
       repository.markContacted(job.id);
       repository.recordDispatchEvent({
         vacancyId: job.id,
@@ -218,7 +236,7 @@ export async function runDispatchApplications(): Promise<DispatchSummary> {
       `invalid email skipped: ${skippedInvalidEmail}, blocked/limited: ${skippedBlocked}`,
   );
 
-  if (sent > 0 && env.googleSpreadsheetId) {
+  if (options.syncSheets !== false && sent > 0 && env.googleSpreadsheetId) {
     try {
       console.log('[Dispatcher] Syncing updated statuses to Google Sheets...');
       await syncDatabaseToSheets();

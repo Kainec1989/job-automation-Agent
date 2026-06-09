@@ -3,7 +3,13 @@ import { isTelegramConfigured, sendTelegramMessage } from '../notifications/tele
 import { env } from '../config/env.js';
 
 const mockSummary = {
-  scraped: 5,
+  scraped: {
+    total: 5,
+    bySource: [
+      { source: 'Stepstone', accepted: 3, rejected: 10 },
+      { source: 'Arbeitsagentur', accepted: 2, rejected: 4 },
+    ],
+  },
   sheetsImport: { rowsRead: 10, emailsUpdated: 1, statusesUpdated: 0, skipped: 9, errors: 0 },
   reclassify: {
     processed: 170,
@@ -40,6 +46,8 @@ const mockSummary = {
     failed: 0,
     markedFailed: 0,
     skippedInvalidEmail: 0,
+    llmCoverLetters: 1,
+    templateCoverLetters: 1,
     sentApplications: [
       {
         company: 'SachsenEnergie AG',

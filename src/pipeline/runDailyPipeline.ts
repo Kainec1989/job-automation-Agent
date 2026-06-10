@@ -170,7 +170,8 @@ export async function runDailyPipeline(
     console.log(
       `[Pipeline] Tavily: processed ${summary.tavily.processed}, ` +
         `saved ${summary.tavily.saved}, not found ${summary.tavily.notFound}` +
-        `${summary.tavily.cacheHits > 0 ? `, cache hits ${summary.tavily.cacheHits}` : ''}.\n`,
+        `${summary.tavily.cacheHits > 0 ? `, cache hits ${summary.tavily.cacheHits}` : ''}` +
+        `${summary.tavily.impressumHits > 0 ? `, impressum hits ${summary.tavily.impressumHits}` : ''}.\n`,
     );
   } else {
     const reason = options.skipTavily

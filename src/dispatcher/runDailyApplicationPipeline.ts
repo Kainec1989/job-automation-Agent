@@ -6,6 +6,7 @@ import { EmailService } from '../sender/emailService.js';
 import type { PendingVacancy, VacancyType } from '../database/types.js';
 import { syncDatabaseToSheets } from '../sheets/syncDatabaseToSheets.js';
 import { emailDomain, isDoNotContact, requestDispatchApproval } from './dispatchGuards.js';
+import { rankVacanciesByFit } from './vacancyFitScore.js';
 
 export interface DispatchedApplication {
   company: string;
@@ -69,7 +70,16 @@ export async function runDispatchApplications(
     failures,
   });
 
-  const candidates = repository.findPendingWithEmail(env.dispatchLimit, env.dispatchMaxRetries);
+  const candidates = rankVacanciesByFit(
+    repository.findPendingWithEmail(env.dispatchLimit, env.dispatchMaxRetries),
+  );
+
+  if (candidates.length > 0) {
+    const top = candidates[0]!;
+    console.log(
+      `[Dispatcher] Fit-ranked queue: top score ${top.fitScore} — ${top.company} (${top.title})`,
+    );
+  }
 
   // Filter out blocked recipients (DO_NOT_CONTACT) before asking for approval or sending.
   const pendingJobs: PendingVacancy[] = [];

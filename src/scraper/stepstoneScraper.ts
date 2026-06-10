@@ -5,6 +5,7 @@ import { scrapePaginatedSearch, sleep } from './browser.js';
 import { buildStepstonePageUrl } from './pagination.js';
 import { processJobCardsWithConcurrency, type JobCardInput } from './processJobCards.js';
 import { mergeVacancies } from './mergeVacancies.js';
+import { scrapeAllStepstoneHttp } from './stepstoneHttpScraper.js';
 import type { JobBoardScraper } from './scraperTypes.js';
 
 function resolveStepstoneUrl(href: string): string {
@@ -73,6 +74,11 @@ export async function scrapeStepstonePage(page: Page, context: BrowserContext): 
 }
 
 async function scrapeAllStepstoneSearches(browser: Browser): Promise<ScrapedVacancy[]> {
+  if (env.stepstoneHttpOnly) {
+    console.log('[Stepstone] STEPSTONE_HTTP_ONLY=true — using HTTP scraper (no Playwright).');
+    return scrapeAllStepstoneHttp();
+  }
+
   const merged = new Map<string, ScrapedVacancy>();
   const searchUrls = env.stepstoneSearchUrls;
 

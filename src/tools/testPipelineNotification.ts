@@ -28,6 +28,7 @@ const mockSummary = {
     failed: 0,
     skipped: 0,
     cacheHits: 1,
+    impressumHits: 1,
     savedEmails: [
       {
         company: 'SachsenEnergie AG',

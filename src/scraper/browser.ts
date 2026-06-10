@@ -1,13 +1,16 @@
 import { existsSync } from 'node:fs';
 import {
-  chromium,
   type Browser,
   type BrowserContext,
   type BrowserContextOptions,
   type LaunchOptions,
   type Page,
 } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { env } from '../config/env.js';
+
+chromium.use(StealthPlugin());
 import { mergeVacancies } from './mergeVacancies.js';
 import type { PageUrlBuilder } from './pagination.js';
 
@@ -76,6 +79,11 @@ export function getContextOptions(storageStatePath?: string): BrowserContextOpti
     } else {
       console.warn(`[Browser] Session file not found: ${storageStatePath}`);
     }
+  }
+
+  if (env.scraperProxyUrl) {
+    options.proxy = { server: env.scraperProxyUrl };
+    console.log(`[Browser] Using proxy: ${env.scraperProxyUrl}`);
   }
 
   return options;

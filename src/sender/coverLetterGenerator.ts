@@ -248,6 +248,44 @@ async function callLlmWithRetry(attempts: LlmAttemptConfig[], prompt: string): P
   throw lastError ?? new Error('LLM call failed');
 }
 
+const BANNED_PHRASES = [
+  'initiativbewerbung',
+  'initiativ bewerbung',
+  'initiativ',
+  '[ihr name]',
+  '[unternehmen]',
+  '[datum]',
+  'lorem ipsum',
+] as const;
+
+export function validateCoverLetterContent(
+  result: CachedCoverLetter,
+  input: CoverLetterInput,
+): string | null {
+  const combined = `${result.subject}\n${result.body}\n${result.emailBody}`.toLowerCase();
+  const companyToken = input.company.trim().toLowerCase().split(/\s+/)[0] ?? '';
+
+  for (const phrase of BANNED_PHRASES) {
+    if (combined.includes(phrase)) {
+      return `banned phrase: ${phrase}`;
+    }
+  }
+
+  if (/\[[^\]]+\]/.test(`${result.subject}${result.body}${result.emailBody}`)) {
+    return 'placeholder brackets';
+  }
+
+  if (companyToken.length >= 4 && !combined.includes(companyToken)) {
+    return 'company name missing';
+  }
+
+  if (result.body.split(/\s+/).length > 320) {
+    return 'body too long';
+  }
+
+  return null;
+}
+
 function parseResponse(raw: string): CachedCoverLetter | null {
   if (!raw.trim()) {
     return null;
@@ -304,9 +342,25 @@ export async function generateAnschreiben(
 
   try {
     const prompt = buildPrompt(input);
-    const raw = await callLlmWithRetry(attempts, prompt);
+    let raw = await callLlmWithRetry(attempts, prompt);
+    let result = parseResponse(raw);
 
-    const result = parseResponse(raw);
+    if (result) {
+      const validationError = validateCoverLetterContent(result, input);
+      if (validationError) {
+        console.warn(`[CoverLetter] Validation failed (${validationError}) — retrying once.`);
+        raw = await callLlmWithRetry(
+          attempts,
+          `${prompt}\n\nDie vorherige Antwort war ungültig (${validationError}). Korrigiere alle Fehler.`,
+        );
+        result = parseResponse(raw);
+        if (result && validateCoverLetterContent(result, input)) {
+          console.warn('[CoverLetter] Retry still invalid — falling back to template.');
+          return null;
+        }
+      }
+    }
+
     if (!result) {
       console.warn('[CoverLetter] LLM returned unusable output — falling back to template.');
       return null;

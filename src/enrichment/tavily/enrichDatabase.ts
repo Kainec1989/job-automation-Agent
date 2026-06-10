@@ -1,5 +1,6 @@
 import { VacancyRepository } from '../../database/vacancyRepository.js';
 import { env } from '../../config/env.js';
+import { lookupImpressumEmail } from '../impressum/lookupImpressumEmail.js';
 import { sleep } from '../../scraper/browser.js';
 import { syncDatabaseToSheets } from '../../sheets/syncDatabaseToSheets.js';
 import { isPlausibleHrEmail } from '../../scraper/hrEmailValidation.js';
@@ -21,6 +22,7 @@ export interface TavilyEnrichmentSummary {
   failed: number;
   skipped: number;
   cacheHits: number;
+  impressumHits: number;
   savedEmails: TavilySavedEmail[];
 }
 
@@ -48,6 +50,7 @@ export async function enrichVacanciesWithTavily(
     failed: 0,
     skipped: 0,
     cacheHits: 0,
+    impressumHits: 0,
     savedEmails: [],
   };
 
@@ -82,17 +85,37 @@ export async function enrichVacanciesWithTavily(
         };
         summary.cacheHits += 1;
       } else {
-        result = await lookupHrEmail({
+        const impressum = await lookupImpressumEmail({
           company: vacancy.company,
-          title: vacancy.title,
           jobUrl: vacancy.url,
         });
 
-        const cacheEmail =
-          result.email && isPlausibleHrEmail(result.email, vacancy.company)
-            ? result.email
-            : null;
-        setTavilyEmailCache(vacancy.company, cacheEmail, result.sourceUrl);
+        if (impressum.email && isPlausibleHrEmail(impressum.email, vacancy.company)) {
+          result = {
+            email: impressum.email,
+            query: 'impressum-crawl',
+            strategy: 'impressum-crawl',
+            queriesAttempted: [],
+            extractedUrls: impressum.sourceUrl ? [impressum.sourceUrl] : [],
+            sourceUrl: impressum.sourceUrl,
+            candidates: [impressum.email],
+            results: [],
+          };
+          summary.impressumHits += 1;
+          setTavilyEmailCache(vacancy.company, impressum.email, impressum.sourceUrl);
+        } else {
+          result = await lookupHrEmail({
+            company: vacancy.company,
+            title: vacancy.title,
+            jobUrl: vacancy.url,
+          });
+
+          const cacheEmail =
+            result.email && isPlausibleHrEmail(result.email, vacancy.company)
+              ? result.email
+              : null;
+          setTavilyEmailCache(vacancy.company, cacheEmail, result.sourceUrl);
+        }
       }
 
       let saved = false;

@@ -103,7 +103,8 @@ export function formatPipelineSummary(summary: DailyPipelineSummary): string {
   }
 
   if (summary.tavily) {
-    const { saved, notFound, failed, cacheHits, processed, savedEmails } = summary.tavily;
+    const { saved, notFound, failed, cacheHits, impressumHits, processed, savedEmails } =
+      summary.tavily;
     if (saved > 0 || notFound > 0 || failed > 0) {
       lines.push('🔎 Tavily (поиск email)');
       lines.push(`  Сохранено в БД: ${saved}`);
@@ -113,6 +114,9 @@ export function formatPipelineSummary(summary: DailyPipelineSummary): string {
       }
       if (cacheHits > 0) {
         lines.push(`  Из кэша: ${cacheHits}`);
+      }
+      if (impressumHits > 0) {
+        lines.push(`  Impressum crawl: ${impressumHits}`);
       }
       if (notFound > 0) {
         lines.push(`  Не найдено: ${notFound}`);

@@ -1,6 +1,10 @@
 import type { Browser } from 'playwright';
 import { env } from '../config/env.js';
 import type { ScrapedVacancy } from '../database/types.js';
+import {
+  fetchArbeitsagenturBewerbungEmail,
+  fetchArbeitsagenturJobDetails,
+} from './arbeitsagenturApi.js';
 import { sleep } from './browser.js';
 import { mergeVacancies } from './mergeVacancies.js';
 import { classifyScrapedVacancy } from './scraperUtils.js';
@@ -11,6 +15,7 @@ const API_URL = 'https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4
 const API_KEY = 'jobboerse-jobsuche';
 const DETAIL_BASE = 'https://www.arbeitsagentur.de/jobsuche/jobdetail/';
 const PAGE_SIZE = 25;
+const MIN_DESCRIPTION_LENGTH = 80;
 
 interface ArbeitsagenturJob {
   titel?: string;
@@ -88,6 +93,7 @@ async function scrapeKeywordSet(
           company,
           url: buildDetailUrl(refnr),
           description: job.stellenbeschreibung ?? null,
+          refnr,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -96,17 +102,24 @@ async function scrapeKeywordSet(
     for (let offset = 0; offset < candidates.length; offset += concurrency) {
       const batch = candidates.slice(offset, offset + concurrency);
       const batchResults = await Promise.all(
-        batch.map((item) =>
-          Promise.resolve(
-            classifyScrapedVacancy(
-              item.title,
-              item.company,
-              item.url,
-              item.description,
-              'Arbeitsagentur',
-            ),
-          ),
-        ),
+        batch.map(async (item) => {
+          let description = item.description;
+          if (!description || description.length < MIN_DESCRIPTION_LENGTH) {
+            const details = await fetchArbeitsagenturJobDetails(item.refnr);
+            description = details.description ?? description;
+          }
+
+          const email = await fetchArbeitsagenturBewerbungEmail(item.refnr);
+
+          return classifyScrapedVacancy(
+            item.title,
+            item.company,
+            item.url,
+            description,
+            'Arbeitsagentur',
+            email,
+          );
+        }),
       );
 
       for (const vacancy of batchResults) {

@@ -1,6 +1,7 @@
 import type { BrowserContext, Page } from 'playwright';
 import { env } from '../config/env.js';
 import { sleep } from './browser.js';
+import { extractJobPostingFromHtml } from './extractJobPostingJsonLd.js';
 import { extractHrEmailFromTexts } from './hrEmailValidation.js';
 
 export interface JobDetails {
@@ -162,13 +163,21 @@ function buildJobDetails(
   pageText: string | null,
   mailtoEmails: string[],
   company?: string | null,
+  structuredEmails: string[] = [],
 ): JobDetails {
   const description = env.fetchFullDescription
     ? mergeDescriptions(snippet, pageText)
     : snippet;
 
   const email = env.extractEmail
-    ? extractHrEmailFromTexts(company, ...mailtoEmails, description, pageText, snippet)
+    ? extractHrEmailFromTexts(
+        company,
+        ...structuredEmails,
+        ...mailtoEmails,
+        description,
+        pageText,
+        snippet,
+      )
     : null;
 
   return { description, email };
@@ -205,9 +214,19 @@ export async function fetchJobDetails(
     }
 
     await detailPage.waitForTimeout(1_500);
-    const pageText = await extractPageText(detailPage, url);
+
+    const html = await detailPage.content();
+    const structured = extractJobPostingFromHtml(html);
+    const cssPageText = await extractPageText(detailPage, url);
+    const pageText = structured?.description ?? cssPageText;
     const mailtoEmails = env.extractEmail ? await extractMailtoEmails(detailPage) : [];
-    const details = buildJobDetails(snippet, pageText, mailtoEmails, company);
+    const details = buildJobDetails(
+      snippet,
+      pageText,
+      mailtoEmails,
+      company,
+      structured?.emails ?? [],
+    );
 
     if (pageText && details.description && details.description.length > (snippet?.length ?? 0)) {
       console.log(`[Description] Enriched (${details.description.length} chars): ${url}`);

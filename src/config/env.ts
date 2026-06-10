@@ -110,6 +110,8 @@ const tavilyNegativeCacheTtlDays = Number(optionalEnv('TAVILY_NEGATIVE_CACHE_TTL
 const tavilyMaxRetries = Number(optionalEnv('TAVILY_MAX_RETRIES', '2'));
 const llmMaxRetries = Number(optionalEnv('LLM_MAX_RETRIES', '3'));
 const llmRetryDelayMs = Number(optionalEnv('LLM_RETRY_DELAY_MS', '3000'));
+const stepstoneHttpOnly = optionalEnv('STEPSTONE_HTTP_ONLY', 'false') === 'true';
+const scraperProxyUrl = process.env.SCRAPER_PROXY_URL?.trim() || null;
 export const env = {
   databasePath: resolve(optionalEnv('DATABASE_PATH', './data/vacancies.db')),
 
@@ -189,6 +191,8 @@ export const env = {
   tavilyMaxRetries,
   llmMaxRetries,
   llmRetryDelayMs,
+  stepstoneHttpOnly,
+  scraperProxyUrl,
 } as const;
 
 export interface TavilyConfig {
